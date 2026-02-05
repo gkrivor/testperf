@@ -1,0 +1,7 @@
+*.xlsx
+*.zip
+~*.*
+__pycache__/
+menv/
+venv/
+temp/
