@@ -262,7 +262,7 @@ for i in range(start_index, end_index):
         exit(0)
 
     # Add the command to run inside container
-    docker_cmd.extend(['sh', '-c', 'pip3 install openpyxl && python3 /root/testperf/test_perf.py '])
+    docker_cmd.extend(['sh', '-c', 'pip3 install -r /root/testperf/requirements.txt && python3 /root/testperf/test_perf.py '])
 
     if '--case' in sys.argv:
         try:
