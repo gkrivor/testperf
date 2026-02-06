@@ -72,7 +72,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
         )
     )
     read_sheet.add_chart(chart, "C1")
-    main_sheet.add_chart(deepcopy(chart), "D35")
+    main_sheet.add_chart(deepcopy(chart), "F35")
 
     inference_sheet.append(["Inference times"])
     inference_table = [[] for _ in range(len(batches))]
@@ -164,7 +164,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     )
     chart.width = 25
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 2) + "1")
-    main_sheet.add_chart(deepcopy(chart), "D5")
+    main_sheet.add_chart(deepcopy(chart), "F5")
 
     chart = LineChart()
     chart.title = "IPS"
@@ -189,7 +189,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     )
     chart.width = 15
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 2) + "16")
-    main_sheet.add_chart(deepcopy(chart), "D20")
+    main_sheet.add_chart(deepcopy(chart), "F20")
 
     chart = LineChart()
     chart.title = "BPS"
@@ -214,7 +214,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     )
     chart.width = 15
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 11) + "16")
-    main_sheet.add_chart(deepcopy(chart), "N20")
+    main_sheet.add_chart(deepcopy(chart), "P20")
 
     idx = 0
     for idx in range(1, len(inference_table[0])):
@@ -242,7 +242,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
         )
     )
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 2) + "33")
-    main_sheet.add_chart(deepcopy(chart), "N35")
+    main_sheet.add_chart(deepcopy(chart), "P35")
 
     report_datetime = datetime.datetime.now()
     main_sheet.title = "Overview"
