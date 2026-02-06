@@ -50,6 +50,9 @@ python docker_runner.py [OPTIONS]
 
 ### Key Options
 
+- `--config <file>`
+  Loads configuration from a provided JSON-file
+
 - `--show-config`
   Display current docker configurations and exit.
 
@@ -86,6 +89,10 @@ python docker_runner.py [OPTIONS]
 ### Examples
 
 Show current configuration:
+```bash
+python docker_runner.py --config configs/my_config.json
+```
+
 ```bash
 python docker_runner.py --show-config
 ```

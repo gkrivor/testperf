@@ -35,6 +35,7 @@ Docker Runner - Performance Testing Tool
 Usage: python docker_runner.py [OPTIONS]
 
 Configuration:
+  --config <file>            Use a specific configuration file (default: docker_runner.json)
   --show-config              Display current docker configurations and exit
 
 Test Selection:
@@ -113,12 +114,19 @@ if '--help' in sys.argv or '-h' in sys.argv or '-help' in sys.argv:
     help_message()
     exit(0)
 
-if os.path.exists('./docker_runner.json'):
+config_file = './docker_runner.json'
+if '--config' in sys.argv:
+    config_file = sys.argv[sys.argv.index('--config') + 1]
+    if not os.path.exists(config_file):
+        print(f"Error: No {config_file} file found, exiting")
+        exit(1)
+
+if os.path.exists(config_file):
     import json
-    with open('./docker_runner.json', 'r') as f:
+    with open(config_file, 'r') as f:
         docker_configs = json.load(f)
 else:
-    print("No docker_runner.json file found, using default configurations")
+    print(f"No {config_file} file found, using default configurations")
 
 print("Current docker_configs:")
 for idx, config in enumerate(docker_configs):
