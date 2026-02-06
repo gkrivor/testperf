@@ -270,6 +270,15 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
 
     try:
+        accelerators = enumerate_accelerators()
+        for item in accelerators['gpu']:
+            main_sheet.append(['GPU:', item['name']])
+        for item in accelerators['npu']:
+            main_sheet.append(['NPU:', item['name']])
+    except Exception as e:
+        main_sheet.append([f'Cannot get accelerators information {e}'])
+
+    try:
         result = subprocess.run(
             ['pip', 'list', '--format', 'columns'],
             capture_output=True,
@@ -299,3 +308,131 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
   except Exception as e:
     print(f'{{ "Error": "Failed to load openpyxl {e}" }}')
   return workbook_path
+
+def _run(cmd, timeout=5):
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+        out = (p.stdout or "").strip()
+        err = (p.stderr or "").strip()
+        return out, err, p.returncode
+    except Exception as e:
+        return "", str(e), 1
+
+def _windows_gpus():
+    # Uses built-in PowerShell + CIM (WMI) to enumerate GPUs
+    ps = [
+        "powershell", "-NoProfile", "-Command",
+        r"Get-CimInstance Win32_VideoController | "
+        r"Select-Object Name,AdapterCompatibility,PNPDeviceID | ConvertTo-Json -Depth 3"
+    ]
+    out, _, rc = _run(ps, timeout=8)
+    if rc != 0 or not out:
+        return []
+    try:
+        import json
+        data = json.loads(out)
+        if isinstance(data, dict):
+            data = [data]
+        return [
+            {
+                "name": d.get("Name"),
+                "vendor": d.get("AdapterCompatibility"),
+                "pnp_device_id": d.get("PNPDeviceID"),
+            }
+            for d in data
+            if d.get("Name")
+        ]
+    except Exception:
+        return []
+
+def _windows_npus():
+    # Windows 11 often exposes NPUs under PnP class "Neural"
+    ps = [
+        "powershell", "-NoProfile", "-Command",
+        r"Get-CimInstance Win32_PnPEntity | "
+        r"Where-Object { $_.PNPClass -eq 'Neural' -or $_.Name -match '(?i)\bNPU\b|Neural Engine|Neural Processing|AI Accelerator' } | "
+        r"Select-Object Name,PNPClass,DeviceID | ConvertTo-Json -Depth 3"
+    ]
+    out, _, rc = _run(ps, timeout=10)
+    if rc != 0 or not out:
+        return []
+    try:
+        import json
+        data = json.loads(out)
+        if isinstance(data, dict):
+            data = [data]
+        return [
+            {"name": d.get("Name"), "class": d.get("PNPClass"), "device_id": d.get("DeviceID")}
+            for d in data
+            if d.get("Name")
+        ]
+    except Exception:
+        return []
+
+def _linux_lspci_lines():
+    if not which("lspci"):
+        return []
+    out, _, rc = _run(["lspci", "-nn"], timeout=5)
+    if rc != 0 or not out:
+        return []
+    return out.splitlines()
+
+def _linux_gpus():
+    lines = _linux_lspci_lines()
+    gpu_markers = ("VGA compatible controller", "3D controller", "Display controller")
+    gpus = []
+    for ln in lines:
+        if any(m in ln for m in gpu_markers):
+            gpus.append({"name": ln})
+    return gpus
+
+def _linux_npus():
+    lines = _linux_lspci_lines()
+    # PCI class "Processing accelerators" is common for AI/NPUs, plus keyword heuristics
+    npus = []
+    import re
+    for ln in lines:
+        if ("Processing accelerators" in ln) or re.search(r"(?i)\bNPU\b|Neural|AI accelerator|TPU", ln):
+            npus.append({"name": ln})
+    return npus
+
+def _mac_gpus():
+    if not which("system_profiler"):
+        return []
+    out, _, rc = _run(["system_profiler", "SPDisplaysDataType", "-json"], timeout=10)
+    if rc != 0 or not out:
+        return []
+    try:
+        import json
+        data = json.loads(out)
+        items = data.get("SPDisplaysDataType", [])
+        gpus = []
+        for it in items:
+            # Keys vary by macOS version; keep it simple
+            name = it.get("sppci_model") or it.get("_name")
+            if name:
+                gpus.append({"name": name, "raw": it})
+        return gpus
+    except Exception:
+        return []
+
+def _mac_npus():
+    # Apple Neural Engine shows up in hardware profile text on Apple Silicon
+    if not which("system_profiler"):
+        return []
+    out, _, rc = _run(["system_profiler", "SPHardwareDataType"], timeout=8)
+    if rc != 0 or not out:
+        return []
+    import re
+    m = re.search(r"Neural Engine:\s*(.+)", out)
+    return [{"name": f"Apple Neural Engine ({m.group(1).strip()})"}] if m else []
+
+def enumerate_accelerators():
+    osname = platform.system()
+    if osname == "Windows":
+        return {"gpu": _windows_gpus(), "npu": _windows_npus()}
+    if osname == "Linux":
+        return {"gpu": _linux_gpus(), "npu": _linux_npus()}
+    if osname == "Darwin":
+        return {"gpu": _mac_gpus(), "npu": _mac_npus()}
+    return {"gpu": [], "npu": []}
