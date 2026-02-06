@@ -11,8 +11,6 @@ print(f'"Platform": "{platform.system()} {platform.release()} {platform.version(
 print('"Steps": [')
 
 script_run_time  = perf_counter()
-import onnxruntime as rt
-spent_time = perf_counter() - script_run_time
 
 try:
   test_model = __import__(model_name, fromlist=["Model"])
