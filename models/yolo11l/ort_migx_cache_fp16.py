@@ -2,6 +2,7 @@ import os
 from class_model import Model
 import numpy as np
 import onnxruntime as ort
+from .common import try_export_model
 
 class Model(Model):
   def __init__(self):
@@ -14,18 +15,7 @@ class Model(Model):
       raise Exception(f'MIGraphX Execution Provider is not available')
   def prepare_batch(self, batch_size):
     file_path = self.get_file_path(self.model_path.format(batch=batch_size))
-    if not os.path.exists(file_path):
-      try:
-        yolo_model_path = 'yolov11l.pt'
-        if os.path.exists(yolo_model_path):
-          from ultralytics import YOLO
-          model = YOLO(yolo_model_path)
-          model.export(format='onnx', imgsz=640, batch=batch_size, half=True)
-          os.rename(yolo_model_path[:-2] + 'onnx', file_path)
-        else:
-          raise Exception(f'YOLO model file {yolo_model_path} not found')
-      except Exception as e:
-        raise Exception(f'Failed to export model {e}')
+    try_export_model(file_path, batch_size)
     cache_path = file_path[:-4] + 'migx'
     if not os.path.exists(cache_path):
       try:
@@ -37,7 +27,6 @@ class Model(Model):
         del os.environ['ORT_MIGRAPHX_MODEL_CACHE_PATH']
       except Exception as e:
         raise Exception(f'Failed to save compiled model {e}')
-    pass
   def read(self):
     #os.environ['ORT_MIGRAPHX_CACHE_PATH'] = self.get_file_path('')
     file_path = self.get_file_path(self.model_path.format(batch=self.batch_size))

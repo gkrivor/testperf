@@ -2,6 +2,7 @@ import os
 from class_model import Model
 import numpy as np
 import onnxruntime as ort
+from .common import try_export_model
 
 class Model(Model):
   def __init__(self):
@@ -12,18 +13,7 @@ class Model(Model):
     self.model_description = 'YOLOv11l FP16 inference with using ONNX Runtime'
   def prepare_batch(self, batch_size):
     file_path = self.get_file_path(self.model_path.format(batch=batch_size))
-    if not os.path.exists(file_path):
-      try:
-        yolo_model_path = 'yolov11l.pt'
-        if os.path.exists(yolo_model_path):
-          from ultralytics import YOLO
-          model = YOLO(yolo_model_path)
-          model.export(format='onnx', imgsz=640, batch=batch_size, half=True)
-          os.rename(yolo_model_path[:-2] + 'onnx', file_path)
-        else:
-          raise Exception(f'YOLO model file {yolo_model_path} not found')
-      except Exception as e:
-        raise Exception(f'Failed to export model {e}')
+    try_export_model(file_path, batch_size)
   def read(self):
     file_path = self.get_file_path(self.model_path.format(batch=self.batch_size))
     self.sess = ort.InferenceSession(file_path, **self.sess_data)
