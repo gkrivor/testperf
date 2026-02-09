@@ -66,6 +66,14 @@ for batch in batches:
   model.prepare_batch(batch)
 spent("Total Preparing Batches")
 
+if '--only-prepare' in sys.argv:
+  checkpoint()
+  model.shutdown()
+  spent("Model Shutdown")
+  print(f'{{ "Status": "Done" }}')
+  print('] }')
+  exit(0)
+
 checkpoint()
 model.read1st()
 spent("Model 1st Read")

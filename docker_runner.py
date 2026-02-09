@@ -14,6 +14,7 @@ docker_configs = [
 #        'docker_image': 'test_image_1',
 #        'docker_file': './Dockerfile1',
 #        'dont_remove': False,
+#        'only_prepare': False, # if True, only prepare the batch will be run, no inference will be run
 #        'docker_custom_run': '',
 #        'docker_hostname': 'epyc_gpu', # optional, useful for understanding test environment
 #        'tests': ['models.yolo8n.ort', 'models.yolo8n.ort_dml']
@@ -22,6 +23,7 @@ docker_configs = [
 #        'docker_image': 'test_image_2',
 #        'docker_file': '',
 #        'dont_remove': True,
+#        'only_prepare': False,
 #        'docker_custom_run': 'docker run -it --gpus all',
 #        'docker_hostname': 'epyc_all_gpu', # optional, useful for understanding test environment
 #        'tests': ['models.yolo11l.ort', 'models.yolo11l.ort_ov']
@@ -36,6 +38,7 @@ Usage: python docker_runner.py [OPTIONS]
 
 Configuration:
   --config <file>            Use a specific configuration file (default: docker_runner.json)
+  --only-prepare             Only prepare the batch will be run, no inference will be run
   --show-config              Display current docker configurations and exit
 
 Test Selection:
@@ -85,6 +88,7 @@ Configuration File:
     - docker_image: (Optional) Name of the Docker image to use
     - docker_file: Path to Dockerfile (used to build image if it doesn't exist)
     - dont_remove: (Optional) Keep container after execution
+    - only_prepare: (Optional) Only prepare the batch will be run, no inference will be run
     - docker_custom_run: (Optional) Custom docker run command
     - docker_hostname: (Optional) Hostname to set in container
     - tests: List of test cases to run
@@ -94,6 +98,7 @@ Configuration File:
     {
       "docker_file": "./dockers/com.org_name.docker_image_name",
       "dont_remove": false,
+      "only_prepare": false,
       "docker_custom_run": "",
       "docker_hostname": "test_machine_A",
       "tests": ["models.yolo8n.ort", "models.yolo8n.ort_dml"]
@@ -102,6 +107,7 @@ Configuration File:
       "docker_image": "my_image_2",
       "docker_file": "",
       "dont_remove": true,
+      "only_prepare": false,
       "docker_custom_run": "docker run -it --gpus all",
       "docker_hostname": "test_machine_B",
       "tests": ["models.yolo11l.ort", "models.yolo11l.ort_ov"]
@@ -203,6 +209,7 @@ for i in range(start_index, end_index):
     docker_image = config.get('docker_image', 'testperf:latest')
     docker_file = config.get('docker_file', None)
     dont_remove = config.get('dont_remove', False) or ('--dont-remove' in sys.argv)
+    only_prepare = config.get('only_prepare', False) or ('--only-prepare' in sys.argv)
     docker_custom_run = config.get('docker_custom_run', '')
     tests = config.get('tests', [])
     
@@ -287,6 +294,8 @@ for i in range(start_index, end_index):
         test_cmd = docker_cmd.copy()
         # Append test name and batch-size to the python command
         test_cmd[-1] = test_cmd[-1] + f'{test} --batch-size {",".join(map(str, batches))}'
+        if only_prepare:
+            test_cmd[-1] = test_cmd[-1] + ' --only-prepare'
         
         print(f"Command: {' '.join(test_cmd)}")
         print()

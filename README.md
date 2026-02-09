@@ -18,11 +18,9 @@ Using 'test_perf.py' script you can automate your performance testing by using a
 
 Most important feature is automatic generation of performance analysis with charts.
 
-
-
-
 ### Arguments
 - --batch-size - list of batch sizes has to be verified
+- --only-prepare - Only prepare the batch will be run, no inference will be run
 
 ### Examples
 
@@ -55,6 +53,9 @@ python docker_runner.py [OPTIONS]
 
 - `--show-config`
   Display current docker configurations and exit.
+
+- `--only-prepare`
+  Only prepare the batch will be run, no inference will be run, applied to all configs
 
 - `--case <test_name>`
   Run a specific test case (e.g., `models.yolo8n.ort`).
@@ -135,6 +136,7 @@ This file should be a JSON list of configuration objects, each containing:
 - `docker_image`: (Optional) Name of the Docker image to use
 - `docker_file`: Path to Dockerfile (used to build the image if it doesn't exist)
 - `dont_remove`: (Optional) Whether to keep the container after execution
+- `only_prepare`: (Optional) Only prepare the batch will be run, no inference will be run, applied only to selected run
 - `docker_custom_run`: (Optional) Custom docker run command
 - `docker_hostname`: (Optional) Hostname to set in the container
 - `tests`: List of test cases to run
@@ -147,6 +149,7 @@ This file should be a JSON list of configuration objects, each containing:
     "docker_file": "./dockers/com.org_name.docker_image_name",
     "dont_remove": false,
     "docker_custom_run": "",
+    "only_prepare": true,
     "docker_hostname": "test_machine_A",
     "tests": ["models.yolo8n.ort", "models.yolo8n.ort_dml"]
   },
