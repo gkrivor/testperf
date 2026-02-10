@@ -8,7 +8,9 @@ class Model(Model):
   def __init__(self):
     super().__init__()
     self.model = None
-    self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    self.device = 'cuda'
+    if not torch.cuda.is_available():
+      raise Exception('CUDA is not available')
     self.model_path = './yolov8n.pt'
     self.model_description = 'YOLOv8n inference with using default Torch.Compile FP16'
   def read(self):
