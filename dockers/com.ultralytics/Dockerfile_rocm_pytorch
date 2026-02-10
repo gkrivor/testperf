@@ -1,0 +1,8 @@
+FROM rocm/pytorch:latest
+
+# Install dependencies
+RUN pip install ultralytics
+
+# Installing headless version of OpenCV
+RUN pip uninstall opencv-python -y
+RUN pip install opencv-python-headless
