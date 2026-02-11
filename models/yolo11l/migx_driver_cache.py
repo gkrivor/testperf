@@ -136,6 +136,11 @@ for batch in batches:
     perf_cmd = [migx_binary, 'perf', '--migraphx', mxr_path]
     result = subprocess.run(perf_cmd, capture_output=True, text=True)
     
+    if (result.returncode != 0) and ('MIGraphX program was likely compiled with offload_copy set' in result.stderr):
+      print(f'{{ "Warning": "Failed to run perf: {result.stderr}" }},')
+      perf_cmd.append('--enable-offload-copy')
+      result = subprocess.run(perf_cmd, capture_output=True, text=True)
+
     if result.returncode != 0:
       print(f'{{ "Error": "Failed to run perf: {result.stderr}" }},')
       continue
