@@ -363,7 +363,7 @@ if inference_times:
       main_sheet.append([f'Cannot get environment variables {e}'])
     
     # Save workbook
-    workbook_name = f"{platform.node().lower()}_migraphx_yolov11l_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
+    workbook_name = f"{platform.node().lower()}_models.yolo8n.migx_driver_cache_fp16_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
     workbook_path = workbook_name
     
     reports_path = os.path.join(os.path.dirname(__file__), '..', '..', 'reports', report_datetime.strftime("%Y%m%d"))
