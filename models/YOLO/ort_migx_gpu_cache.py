@@ -47,9 +47,11 @@ class Model(Model):
         images_shape = [self.batch, 3, self.imgsz, self.imgsz]
         dtype = get_ort_input_torch_dtype(self.sess)
         np_dtype = get_ort_input_np_dtype(self.sess)
-        images_tensor = torch.rand(images_shape, dtype=dtype, device=self.device)
-        self.input_data.bind_input('images', 'cuda', 0, np_dtype, images_shape, images_tensor.cuda().data_ptr())
-        self.input_data.bind_output('output0', 'cuda')
+        self._images_tensor = torch.rand(images_shape, dtype=dtype, device=self.device)
+        input_name = self.sess.get_inputs()[0].name
+        self.input_data.bind_input(input_name, 'cuda', 0, np_dtype, images_shape, self._images_tensor.data_ptr())
+        for out in self.sess.get_outputs():
+            self.input_data.bind_output(out.name, 'cuda')
 
     def inference(self):
         self.sess.run_with_iobinding(self.input_data)

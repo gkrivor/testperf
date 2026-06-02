@@ -1,5 +1,4 @@
 import os
-import shutil
 
 
 def get_np_dtype(precision):
@@ -46,17 +45,72 @@ def onnx_name(model_name, batch, precision, imgsz):
     return f'{pfx}_{int(batch)}b_{int(imgsz)}.onnx'
 
 
+def get_ultralytics_task(weights):
+    name = str(weights).strip().lower()
+    # Ultralytics encodes the task in the weights filename suffix.
+    for suffix, task in (
+        ('-cls', 'classify'),
+        ('-seg', 'segment'),
+        ('-pose', 'pose'),
+        ('-obb', 'obb'),
+    ):
+        if name.endswith(suffix) or f'{suffix}.' in name:
+            return task
+    return 'detect'
+
+
+_EXPORT_CHILD_SCRIPT = r"""
+import shutil
+import sys
+
+from ultralytics import YOLO
+
+weights, out_path, batch, imgsz, half_flag, task, dynamic_flag = sys.argv[1:8]
+model = YOLO(f'{weights}.pt', task=task)
+onnx_path = model.export(
+    format='onnx',
+    imgsz=int(imgsz),
+    batch=int(batch),
+    half=(half_flag == '1'),
+    dynamic=(dynamic_flag == '1'),
+)
+if str(onnx_path) != str(out_path):
+    shutil.move(str(onnx_path), out_path)
+"""
+
+
 def try_export_model(file_path, model_name, batch, precision, imgsz, dynamic=False):
+    """Export a YOLO .pt to ONNX in a subprocess.
+
+    Ultralytics' ONNX export sets ``CUDA_VISIBLE_DEVICES=''`` to force a CPU
+    trace, which breaks ``migraphx.get_target('gpu')`` in the same process. 
+    Run the export in a subprocess so the env mutation stays contained.
+    """
+    import subprocess
+    import sys
+
     if os.path.exists(file_path):
         return
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    from ultralytics import YOLO
-
-    half = str(precision) == 'fp16'
     weights = str(model_name).strip()
-    model = YOLO(f'{weights}.pt', task='detect')
-    onnx_path = model.export(format='onnx', imgsz=int(imgsz), batch=int(batch), half=bool(half), dynamic=bool(dynamic))
+    task = get_ultralytics_task(weights)
+    half_flag = '1' if str(precision) == 'fp16' else '0'
+    dynamic_flag = '1' if dynamic else '0'
 
-    if str(onnx_path) != str(file_path):
-        shutil.move(str(onnx_path), file_path)
+    cmd = [
+        sys.executable,
+        '-c',
+        _EXPORT_CHILD_SCRIPT,
+        weights,
+        str(file_path),
+        str(int(batch)),
+        str(int(imgsz)),
+        half_flag,
+        task,
+        dynamic_flag,
+    ]
+    subprocess.check_call(cmd)
+
+    if not os.path.exists(file_path):
+        raise RuntimeError(f'ONNX export did not produce {file_path}')
