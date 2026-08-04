@@ -6,6 +6,7 @@ class Model:
     self.batch_size = 1
     self.total_inference_runs = 100
     self.current_inference_run = 0
+    self.empty_runs = 0
     pass
   def prepare_batch(self, batch_size):
     pass

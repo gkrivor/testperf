@@ -151,7 +151,7 @@ for batch in batches:
 
   # Few empty runs
   cnt = 0
-  while cnt < 10:
+  while cnt < model.empty_runs:
     model.inference()
     cnt += 1
 
