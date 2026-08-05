@@ -78,7 +78,7 @@ class VLLMCommon(Model):
         )
         self.read_request = (
             b'POST /v1/completions HTTP/1.1\r\n' +
-            f'Host: {self.vllm_config['host']}:{self.vllm_config['port']}\r\n'.encode('utf-8') +
+            f'Host: {self.vllm_config["host"]}:{self.vllm_config["port"]}\r\n'.encode('utf-8') +
             b'Content-Type: application/json\r\n' +
             f'Content-Length: {len(self.read_prompt)}\r\n'.encode('utf-8') +
             b'Accept: */*\r\n' +
@@ -179,7 +179,7 @@ class VLLMOpenAI(VLLMCommon):
             }, indent=4)
             self.test_prompts.append(
                 b'POST /v1/completions HTTP/1.1\r\n' +
-                f'Host: {self.vllm_config['host']}:{self.vllm_config['port']}\r\n'.encode('utf-8') +
+                f'Host: {self.vllm_config["host"]}:{self.vllm_config["port"]}\r\n'.encode('utf-8') +
                 b'Content-Type: application/json\r\n' +
                 f'Content-Length: {len(data)}\r\n'.encode('utf-8') +
                 b'Accept: */*\r\n' +
@@ -227,7 +227,7 @@ class VLLMBench(VLLMCommon):
         self.bench_config = {
             'backend': 'vllm',
             'model': self.vllm_config['model'],
-            'base-url': 'http://' + self.vllm_config['host'] + ':' + str(self.vllm_config['port']),
+            'base-url': 'http://' + self.vllm_config["host"] + ':' + str(self.vllm_config["port"]),
             'save-result': '',
             'result-filename': Path(__file__).parent / 'temp' / 'vllm_bench_result.json',
             'dataset-name': self.dataset_name,
@@ -263,7 +263,7 @@ class VLLMBench(VLLMCommon):
         result = subprocess.run(self.bench_command_line, capture_output=True, text=True, env=self.bench_environment)
         if result.returncode != 0:
             print(f'{{ "VLLM Bench Environment Variables": "{self.bench_environment}" }},', flush=True)
-            print(f'{{ "VLLM Bench Command Line": "{' '.join(self.bench_command_line)}" }},', flush=True)
+            print(f'{{ "VLLM Bench Command Line": "{" ".join(self.bench_command_line)}" }},', flush=True)
             print(f'{{ "VLLM Bench Result": "{result.returncode}" }},', flush=True)
             print(f'{{ "VLLM Bench Output": "{result.stdout}" }},', flush=True)
             print(f'{{ "VLLM Bench Error": "{result.stderr}" }},', flush=True)

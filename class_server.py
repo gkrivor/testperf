@@ -63,7 +63,7 @@ class ServerKeeper:
                 print(f'{{ "Server Status": "Already Started at {self.host}:{self.port}" }},', flush=True)
             return
 
-        print(f'{{ "Server Command Line": "{' '.join(server_command_line)}" }},', flush=True)
+        print(f'{{ "Server Command Line": "{" ".join(server_command_line)}" }},', flush=True)
 
         self.server_command_line = server_command_line
         self.server_env = server_env

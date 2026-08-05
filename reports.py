@@ -324,7 +324,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
         print(f'{{ "Error": "Failed to copy !StatViewer.xlsm {e}" }}')
     os.rename(workbook_path, os.path.join(reports_path, workbook_path))
 
-    print(f"{{ \"Workbook\": \"{os.path.join(reports_path, workbook_path).replace('\\', '/')}\" }},")
+    print('{ "Workbook": "' + os.path.join(reports_path, workbook_path).replace("\\", "/") + '" },')
 
   except Exception as e:
     print(f'{{ "Error": "Failed to load openpyxl {e}" }},')
@@ -754,7 +754,7 @@ def vllm_bench_report(model, model_name, batches, all_results):
     except Exception as e:
         main_sheet.append([f'Cannot get environment variables {e}'])
 
-    workbook_path = f"{platform.node().lower()}_{model_name.replace('/', '_').replace('\\', '_')}_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
+    workbook_path = f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
     wb.save(workbook_path)
 
     reports_path = os.path.join(os.path.dirname(__file__), 'reports', report_datetime.strftime("%Y%m%d"))
@@ -767,7 +767,7 @@ def vllm_bench_report(model, model_name, batches, all_results):
         print(f'{{ "Error": "Failed to copy !StatViewer.xlsm {e}" }}')
     os.rename(workbook_path, os.path.join(reports_path, workbook_path))
 
-    print(f"{{ \"Workbook\": \"{os.path.join(reports_path, workbook_path).replace('\\', '/')}\" }},")
+    print('{ "Workbook": "' + os.path.join(reports_path, workbook_path).replace("\\", "/") + '" },')
 
   except Exception as e:
     print(f'{{ "Error": "Failed to load openpyxl {e}" }},')
@@ -1177,7 +1177,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
 
         html_doc = ''.join(parts)
 
-        report_path = f"{platform.node().lower()}_{model_name.replace('/', '_').replace('\\', '_')}_{report_datetime.strftime('%Y%m%d_%H%M%S')}.html"
+        report_path = f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.html"
         with open(report_path, 'w', encoding='utf-8') as f:
             f.write(html_doc)
 
@@ -1188,7 +1188,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
         os.replace(report_path, final_path)
         report_path = final_path
 
-        print(f"{{ \"HtmlReport\": \"{report_path.replace('\\', '/')}\" }},")
+        print('{ "HtmlReport": "' + report_path.replace("\\", "/") + '" },')
 
     except Exception as e:
         print(f'{{ "Error": "Failed to build HTML report {e}" }},')
