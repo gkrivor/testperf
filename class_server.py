@@ -82,6 +82,8 @@ class ServerKeeper:
                 raise RuntimeError(f'{{ "Server Status": "Server startup timed out after {self.startup_timeout} seconds" }},')
             if int(time.time() - start_time) % 5 == 0:
                 print(f'{{ "Server Status": "Waiting for server to be available at {self.host}:{self.port}, elapsed {time.time() - start_time:.0f} / {self.startup_timeout} seconds" }},', flush=True)
+            if self.process is not None and self.process.poll() is not None:
+                raise RuntimeError(f'{{ "Server Status": "Server startup failed with return code {self.process.returncode}" }},')
             time.sleep(1)
 
         print(f'{{ "Server Status": "Started at {self.host}:{self.port}" }},', flush=True)
