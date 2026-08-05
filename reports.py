@@ -610,6 +610,66 @@ def _mac_list_modules():
 
     return modules
 
+# Canonical benchmark result schema used by the reports below. This is the vLLM
+# result shape and is treated as the base: reports never emit anything outside
+# of these keys.
+_VLLM_RESULT_KEYS = [
+    'num_prompts',
+    'request_throughput',
+    'output_throughput',
+    'total_token_throughput',
+    'max_output_tokens_per_s',
+    'mean_ttft_ms',
+    'median_ttft_ms',
+    'std_ttft_ms',
+    'p99_ttft_ms',
+    'mean_tpot_ms',
+    'median_tpot_ms',
+    'std_tpot_ms',
+    'p99_tpot_ms',
+    'mean_itl_ms',
+    'median_itl_ms',
+    'std_itl_ms',
+    'p99_itl_ms',
+    'duration',
+    'completed',
+    'failed',
+    'total_input_tokens',
+    'total_output_tokens',
+    'request_goodput',
+    'max_concurrent_requests',
+    'rtfx',
+]
+
+# Maps a vLLM base key to the equivalent key used by other backends (SGLang)
+# when the name differs. Only keys that exist in the vLLM base schema are
+# produced; backend-specific extras are dropped.
+_RESULT_KEY_ALIASES = {
+    'total_token_throughput': 'total_throughput',
+    'num_prompts': 'completed',
+}
+
+def normalize_bench_result(result):
+    """Normalize a single benchmark result line onto the vLLM schema.
+
+    vLLM results already match the base schema and pass through with their
+    values intact. SGLang results use a few different key names (and omit some
+    vLLM-only fields); known aliases are remapped and any base key without a
+    source value is filled with None so downstream reporting stays uniform. The
+    vLLM schema is the base and is never extended with backend-specific fields.
+    """
+    if result is None:
+        return None
+    normalized = {}
+    for key in _VLLM_RESULT_KEYS:
+        if key in result:
+            normalized[key] = result[key]
+        elif key in _RESULT_KEY_ALIASES and _RESULT_KEY_ALIASES[key] in result:
+            normalized[key] = result[_RESULT_KEY_ALIASES[key]]
+        else:
+            normalized[key] = None
+    return normalized
+
 def vllm_bench_report(model, model_name, batches, all_results):
   columns_mapping = {
     'num_prompts': 'Number of Prompts',
@@ -659,11 +719,13 @@ def vllm_bench_report(model, model_name, batches, all_results):
     benchmark_table = [benchmark_sheet.max_row + 1, benchmark_sheet.max_row + len(batches) + 1]
     # Making rows data
     for batch in batches:
+        # Normalize each result line onto the vLLM schema before reporting
+        result = normalize_bench_result(all_results[batch])
         # Skip empty results
-        if all_results[batch] is None:
+        if result is None:
             print(f'{{ "Warning": "No results for batch {batch}" }},')
             continue
-        benchmark_sheet.append([batch, *[all_results[batch][key] for key in columns_mapping.keys()]])
+        benchmark_sheet.append([batch, *[result[key] for key in columns_mapping.keys()]])
     
     columns = list(columns_mapping.keys())
     for idx, key in enumerate(columns):
@@ -954,6 +1016,9 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
                     return f'{v:,.2f}'
                 return f'{v:.4f}'
             return esc(v)
+
+        # Normalize each result line onto the vLLM schema before reporting
+        all_results = {b: normalize_bench_result(all_results.get(b)) for b in batches}
 
         valid_batches = [b for b in batches if all_results.get(b) is not None]
         for b in batches:
