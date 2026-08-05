@@ -58,6 +58,7 @@ class VLLMCommon(Model):
             if value is None: continue
             if key in ['model']: continue # Skip model parameter, it will be set in the command line
             server_command_line.append(f'--{key}')
+            if value == '': continue
             server_command_line.append(str(value))
         # Set up environment variables for the subprocess
         env = self.get_environment_variables()
