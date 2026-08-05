@@ -52,8 +52,9 @@ for batch in batches:
 
   bench_command_line = ['vllm', 'bench', 'serve', '--save-result', '--result-filename', result_filepath.as_posix()]
   for key, value in bench_config.items():
+    if value is None: continue
     bench_command_line.append(f'--{key}')
-    if value is None or value == '': continue
+    if value == '': continue
     bench_command_line.append(str(value))
   bench_environment = instance.get_environment_variables()
 

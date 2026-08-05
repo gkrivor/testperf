@@ -255,8 +255,9 @@ class VLLMBench(VLLMCommon):
             self.bench_config['result-filename'].unlink()
         self.bench_command_line = [*self.bench_cmd, *self.bench_extra_args]
         for key, value in self.bench_config.items():
+            if value is None: continue
             self.bench_command_line.append(f'--{key}')
-            if value is None or value == '': continue
+            if value == '': continue
             self.bench_command_line.append(str(value))
         self.bench_environment = self.get_environment_variables()
     
