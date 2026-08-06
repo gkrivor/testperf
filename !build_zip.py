@@ -4,6 +4,7 @@ import platform
 
 package = {
     '.': [
+        # Scripts
         '__main__.py',
         'settings.py',
         'test_perf.py',
@@ -13,10 +14,13 @@ package = {
         'class_openai.py',
         'class_vllm.py',
         'class_sglang.py',
+        # Resources
         '!StatViewer.xlsm',
+        'requirements.txt',
     ],
     'models': 
         list(Path('./models/vllm').glob('**/*.py')) +
+        list(Path('./models/sgl').glob('**/*.py')) +
         list(Path('./models/qwen').glob('**/*.py')),
 }
 
