@@ -2,38 +2,48 @@ import os
 import sys
 from time import perf_counter
 import platform
+import settings
+import importlib
 
 # Accept model name with dot delimiter or directory separator (backslash or forward slash)
-model_name = sys.argv[1].replace('/', '.').replace('\\', '.') if len(sys.argv) > 1 else 'test_model'
+model_name = sys.argv[1].replace('/', '.').replace('\\', '.').replace('..', '.') if len(sys.argv) > 1 else 'test_model'
 if model_name.endswith('.py'):
   model_name = model_name[:-3]
+if model_name.startswith('.'):
+  model_name = model_name[1:]
 
 print(f'{{ "Model": "{model_name}",')
 print(f'"Hostname": "{platform.node()}",')
 print(f'"Platform": "{platform.system()} {platform.release()} {platform.version()}",')
+print(f'"Python Executable": "{sys.executable}",')
+print(f'"Python Version": "{sys.version}",')
+print(f'"App path": "{settings.APP_PATH.as_posix()}",')
 print('"Steps": [')
 
 script_run_time  = perf_counter()
 
 try:
-  test_model = __import__(model_name, fromlist=["Model"])
+  # For working with modules near the archive
+  if settings.RUNNING_FROM_ARCHIVE:
+    sys.path.insert(0, settings.APP_PATH.as_posix())
+    #models_init = settings.APP_PATH / 'models' / '__init__.py'
+    #if not models_init.exists():
+    #  models_init.touch()
+  import models
+  print(models.__path__)
+  test_model = importlib.import_module(model_name)
+  print(f'{{ "Model": "{model_name}", "Status": "Loaded", "Path": "{test_model.__file__}" }},')
+
+  # Check if Model class exists in the loaded module
+  if not hasattr(test_model, 'Model'):
+    raise AttributeError(f"Module '{model_name}' does not have a 'Model' class")
 except Exception as e:
   print(f'{{ "Error": "Failed to load model {e}" }},')
-  cur_dir = os.path.dirname(os.path.abspath(__file__))
-  path_parts = model_name.split('.')
-  model_name = ''
-  for part in path_parts:
-    last_dir = str(cur_dir)
-    cur_dir = os.path.join(cur_dir, part)
-    if not os.path.exists(cur_dir):
-      print('\n\nAvailable options: ')
-      print("\n".join([f'{model_name[1:]}.{x}...' for x in os.listdir(last_dir)]))
-      break
-    model_name = model_name + '.' + part
+  settings.get_available_models(model_name)
   exit(1)
 
-if not os.path.exists('./temp'):
-  os.makedirs('./temp')
+if not settings.APP_PATH.joinpath('temp').exists():
+  settings.APP_PATH.joinpath('temp').mkdir(parents=True)
 
 # Setting batch sizes from command line
 batches = [1]
