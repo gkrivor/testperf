@@ -6,6 +6,7 @@ import platform
 from copy import deepcopy
 from shutil import copy, which
 import traceback
+import settings
 
 def performance_report(model,model_name, read_times, inference_times, warm_up_times, batches):
   workbook_path = None
@@ -311,20 +312,24 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     except Exception as e:
         main_sheet.append([f'Cannot get environment variables {e}'])
 
-    workbook_path = f"{platform.node().lower()}_{model_name}_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
-    wb.save(workbook_path)
-
-    reports_path = os.path.join(os.path.dirname(__file__), 'reports', report_datetime.strftime("%Y%m%d"))
-    if not os.path.exists(reports_path):
+    reports_path = settings.APP_PATH / 'reports' / report_datetime.strftime("%Y%m%d")
+    if not reports_path.exists():
       os.makedirs(reports_path)
       # Copying statistics aggregator to a reports folder
       try:
-        copy(os.path.join(os.path.dirname(__file__), "!StatViewer.xlsm"), os.path.join(reports_path, "!StatViewer.xlsm"))
+        if settings.RUNNING_FROM_ARCHIVE:
+            data = settings.APP_LOADER.get_data("!StatViewer.xlsm")
+            with open(reports_path / "!StatViewer.xlsm", "wb") as f:
+                f.write(data)
+        else:
+            copy(settings.APP_PATH / "!StatViewer.xlsm", reports_path / "!StatViewer.xlsm")
       except Exception as e:
         print(f'{{ "Error": "Failed to copy !StatViewer.xlsm {e}" }}')
-    os.rename(workbook_path, os.path.join(reports_path, workbook_path))
 
-    print('{ "Workbook": "' + os.path.join(reports_path, workbook_path).replace("\\", "/") + '" },')
+    workbook_path =  reports_path / (f"{platform.node().lower()}_{model_name}_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx")
+    wb.save(workbook_path.as_posix())
+
+    print('{ "Workbook": "' + workbook_path.as_posix().replace("\\", "/") + '" },')
 
   except Exception as e:
     print(f'{{ "Error": "Failed to load openpyxl {e}" }},')
@@ -816,20 +821,24 @@ def vllm_bench_report(model, model_name, batches, all_results):
     except Exception as e:
         main_sheet.append([f'Cannot get environment variables {e}'])
 
-    workbook_path = f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
-    wb.save(workbook_path)
-
-    reports_path = os.path.join(os.path.dirname(__file__), 'reports', report_datetime.strftime("%Y%m%d"))
-    if not os.path.exists(reports_path):
-      os.makedirs(reports_path)
+    reports_path = settings.APP_PATH / 'reports' / report_datetime.strftime("%Y%m%d")
+    if not reports_path.exists():
+      reports_path.mkdir(parents=True)
       # Copying statistics aggregator to a reports folder
       try:
-        copy(os.path.join(os.path.dirname(__file__), "!StatViewer.xlsm"), os.path.join(reports_path, "!StatViewer.xlsm"))
+        if settings.RUNNING_FROM_ARCHIVE:
+            data = settings.APP_LOADER.get_data("!StatViewer.xlsm")
+            with open(reports_path / "!StatViewer.xlsm", "wb") as f:
+                f.write(data)
+        else:
+            copy(settings.APP_PATH / "!StatViewer.xlsm", reports_path / "!StatViewer.xlsm")
       except Exception as e:
         print(f'{{ "Error": "Failed to copy !StatViewer.xlsm {e}" }}')
-    os.rename(workbook_path, os.path.join(reports_path, workbook_path))
 
-    print('{ "Workbook": "' + os.path.join(reports_path, workbook_path).replace("\\", "/") + '" },')
+    workbook_path = reports_path / (f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx")
+    wb.save(workbook_path.as_posix())
+
+    print('{ "Workbook": "' + workbook_path.as_posix().replace("\\", "/") + '" },')
 
   except Exception as e:
     print(f'{{ "Error": "Failed to load openpyxl {e}" }},')
@@ -1242,20 +1251,17 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
 
         html_doc = ''.join(parts)
 
-        report_path = f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.html"
-        with open(report_path, 'w', encoding='utf-8') as f:
+        reports_path = settings.APP_PATH / 'reports' / report_datetime.strftime("%Y%m%d")
+        if not reports_path.exists():
+            reports_path.mkdir(parents=True)
+
+        html_path = reports_path / (f"{platform.node().lower()}_" + model_name.replace('/', '_').replace('\\', '_') + f"_{report_datetime.strftime('%Y%m%d_%H%M%S')}.html")
+        with open(html_path, 'w', encoding='utf-8') as f:
             f.write(html_doc)
 
-        reports_path = os.path.join(os.path.dirname(__file__), 'reports', report_datetime.strftime("%Y%m%d"))
-        if not os.path.exists(reports_path):
-            os.makedirs(reports_path)
-        final_path = os.path.join(reports_path, report_path)
-        os.replace(report_path, final_path)
-        report_path = final_path
-
-        print('{ "HtmlReport": "' + report_path.replace("\\", "/") + '" },')
+        print('{ "HtmlReport": "' + html_path.as_posix().replace("\\", "/") + '" },')
 
     except Exception as e:
         print(f'{{ "Error": "Failed to build HTML report {e}" }},')
         print(traceback.format_exc())
-    return report_path
+    return html_path

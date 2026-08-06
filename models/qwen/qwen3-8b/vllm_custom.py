@@ -4,6 +4,7 @@ import subprocess
 from .vllm_cli import Model as BaseModel
 import json
 from pathlib import Path
+import settings
 
 instance = BaseModel()
 
@@ -38,10 +39,10 @@ if '--batch-size' in sys.argv:
   except Exception as e:
     print(f'{{ "Error": "Failed to set batch size {e}, using default [{", ".join(map(str, batches))}]" }},')
 
-if not os.path.exists('./temp'):
-  os.makedirs('./temp')
+if not os.path.exists(settings.APP_PATH.joinpath('temp')):
+  os.makedirs(settings.APP_PATH.joinpath('temp'))
 
-result_filepath = Path('.') / 'temp' / 'vllm_bench_result.json'
+result_filepath = settings.APP_PATH / 'temp' / 'vllm_bench_result.json'
 all_results = {}
 
 for batch in batches:

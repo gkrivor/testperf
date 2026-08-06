@@ -7,6 +7,7 @@ import socket
 import json
 import random
 from class_server import ServerKeeper
+import settings
 
 vllm_server = None
 
@@ -27,8 +28,8 @@ class VLLMCommon(Model):
         self.env = {
             'VLLM_TARGET_DEVICE': os.environ.get('VLLM_TARGET_DEVICE', 'cuda'),
             'HF_TOKEN': os.environ.get('HF_TOKEN', None),
-            'VLLM_CACHE_ROOT': Path(os.environ.get('VLLM_CACHE_ROOT', Path(__file__).parent / 'temp' / 'vllm_cache')),
-            'HF_HOME': Path(os.environ.get('HF_HOME', Path(__file__).parent / 'temp' / 'hf_cache')),
+            'VLLM_CACHE_ROOT': Path(os.environ.get('VLLM_CACHE_ROOT', settings.APP_PATH / 'temp' / 'vllm_cache')),
+            'HF_HOME': Path(os.environ.get('HF_HOME', settings.APP_PATH / 'temp' / 'hf_cache')),
         }
 
         # Internal settings
@@ -230,7 +231,7 @@ class VLLMBench(VLLMCommon):
             'model': self.vllm_config['model'],
             'base-url': 'http://' + self.vllm_config["host"] + ':' + str(self.vllm_config["port"]),
             'save-result': '',
-            'result-filename': Path(__file__).parent / 'temp' / 'vllm_bench_result.json',
+            'result-filename': settings.APP_PATH / 'temp' / 'vllm_bench_result.json',
             'dataset-name': self.dataset_name,
             'random-input-len': self.random_input_length,
             'random-output-len': self.random_output_length,

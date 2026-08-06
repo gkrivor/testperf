@@ -7,6 +7,7 @@ import socket
 import json
 import random
 from class_server import ServerKeeper
+import settings
 
 sglang_server = None
 
@@ -26,8 +27,8 @@ class SGLangCommon(Model):
         # Environment variables to be set/unset for the subprocess, if variable is None - it will be unset
         self.env = {
             'HF_TOKEN': os.environ.get('HF_TOKEN', None),
-            'SGLANG_CACHE_DIR': Path(os.environ.get('SGLANG_CACHE_DIR', Path(__file__).parent / 'temp' / 'sglang_cache')),
-            'HF_HOME': Path(os.environ.get('HF_HOME', Path(__file__).parent / 'temp' / 'hf_cache')),
+            'SGLANG_CACHE_DIR': Path(os.environ.get('SGLANG_CACHE_DIR', settings.APP_PATH / 'temp' / 'sglang_cache')),
+            'HF_HOME': Path(os.environ.get('HF_HOME', settings.APP_PATH / 'temp' / 'hf_cache')),
         }
 
         # Internal settings
@@ -228,7 +229,7 @@ class SGLangBench(SGLangCommon):
             'backend': 'sglang',
             'model': self.sglang_config['model-path'],
             'base-url': 'http://' + self.sglang_config["host"] + ':' + str(self.sglang_config["port"]),
-            'output-file': Path(__file__).parent / 'temp' / 'sglang_bench_result.json',
+            'output-file': settings.APP_PATH / 'temp' / 'sglang_bench_result.json',
             'dataset-name': self.dataset_name,
             'random-input-len': self.random_input_length,
             'random-output-len': self.random_output_length,
