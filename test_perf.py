@@ -26,11 +26,7 @@ try:
   # For working with modules near the archive
   if settings.RUNNING_FROM_ARCHIVE:
     sys.path.insert(0, settings.APP_PATH.as_posix())
-    #models_init = settings.APP_PATH / 'models' / '__init__.py'
-    #if not models_init.exists():
-    #  models_init.touch()
-  import models
-  print(models.__path__)
+
   test_model = importlib.import_module(model_name)
   print(f'{{ "Model": "{model_name}", "Status": "Loaded", "Path": "{test_model.__file__}" }},')
 
