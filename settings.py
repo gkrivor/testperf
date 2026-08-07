@@ -14,41 +14,47 @@ ARCHIVE_PATH = Path(APP_LOADER.archive) if RUNNING_FROM_ARCHIVE else None
 APP_PATH = ARCHIVE_PATH.parent if RUNNING_FROM_ARCHIVE else Path(__file__).parent
 
 def get_available_models(lookup_name):
-  cur_dir = APP_PATH.as_posix()
+  fs_path = [APP_PATH.as_posix()]
+  archive_path = []
   path_parts = lookup_name.split('.')
-  model_name = ''
-  fs_idx = 0
+
+  cur_str = fs_path[0]
   for part in path_parts:
-    last_dir = str(cur_dir)
-    cur_dir = os.path.join(cur_dir, part)
-    if not os.path.exists(cur_dir) or part == '':
-      print('\n\nAvailable options: ')
-      print("\n".join([f'{model_name[1:] + "." if model_name != "" else ""}{x}...' for x in os.listdir(last_dir)]))
-      break
-    fs_idx += 1
-    model_name = model_name + '.' + part
+    cur_str = os.path.join(cur_str, part)
+    if os.path.exists(cur_str):
+      fs_path.append(part)
+
+  archive_branch = None
   if RUNNING_FROM_ARCHIVE:
+    folder_tree = {'.': []}
+    # Make a folder tree from the archive
     import zipfile
-    items = {}
     with zipfile.ZipFile(APP_LOADER.archive, 'r') as arch:
       for entry in arch.namelist():
-        if not entry.startswith('models/') or not entry.endswith('.py') or entry.endswith('__init__.py'):
-          continue
-        current_branch = items
-        for part in entry[:-3].split('/'):
+        entry_path = entry.split('/')
+        current_branch = folder_tree
+        for part in entry_path[:-1]:
           if part not in current_branch:
-            current_branch[part] = {}
+            current_branch[part] = {'.': []}
           current_branch = current_branch[part]
-    current_branch = items if len(path_parts) > 0 and path_parts[0] == 'models' else {}
-    model_name = ''
-    arch_idx = 0
+        current_branch['.'].append(entry_path[-1])
+
+    archive_branch = folder_tree
     for part in path_parts:
-      if part in current_branch:
-        current_branch = current_branch[part]
-        model_name = model_name + '.' + part
-        arch_idx += 1
-        continue
-      if len(current_branch) > 0 and arch_idx >= fs_idx:
-        print('\nDefault options: ')
-        print("\n".join([f'{model_name[1:] + "." if model_name != "" else ""}{x}...' for x in current_branch.keys()]))
-      break
+      if part in archive_branch:
+        archive_branch = archive_branch[part]
+        archive_path.append(part)
+      else:
+        break
+
+  if len(fs_path) >= (len(archive_path) + 1):
+    print('\n\nAvailable options: ')
+    model_name = '.'.join(fs_path[1:])
+    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}...' for x in os.listdir('/'.join(fs_path)) if os.path.isdir(os.path.join('/'.join(fs_path), x))]))
+    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}' for x in os.listdir('/'.join(fs_path)) if not os.path.isdir(os.path.join('/'.join(fs_path), x))]))
+
+  if (len(archive_path) + 1) >= len(fs_path) and archive_branch is not None:
+    print('\nDefault options: ')
+    model_name = '.'.join(archive_path)
+    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}...' for x in list(archive_branch.keys()) if x != '.']))
+    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}' for x in archive_branch['.']]))
