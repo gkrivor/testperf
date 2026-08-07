@@ -6,6 +6,7 @@ package = {
     '.': [
         # Scripts
         '__main__.py',
+        'argutils.py',
         'settings.py',
         'test_perf.py',
         'reports.py',
