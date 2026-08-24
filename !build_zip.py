@@ -22,7 +22,11 @@ package = {
     'models': 
         list(Path('./models/vllm').glob('**/*.py')) +
         list(Path('./models/sgl').glob('**/*.py')) +
-        list(Path('./models/qwen').glob('**/*.py')),
+        list(Path('./models/qwen').glob('**/*.py')) +
+        list(Path('./models/glm').glob('**/*.py')),
+    'batches': 
+        list(Path('./batches/glm').glob('**/*.py')) +
+        list(Path('./batches/qwen').glob('**/*.py')),
 }
 
 def build_zip(package, out_file, interpreter=None, exclude=()):

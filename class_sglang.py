@@ -51,15 +51,19 @@ class SGLangCommon(Model):
             elif key in env:
                 env.pop(key)
         return env
-
-    def _start_server(self):
-        global sglang_server
+    
+    def get_server_command_line(self):
         server_command_line = [*self.serve_cmd, *self.serve_extra_args]
         for key, value in self.sglang_config.items():
             if value is None: continue
             server_command_line.append(f'--{key}')
             if value == '': continue
             server_command_line.append(str(value))
+        return server_command_line
+
+    def _start_server(self):
+        global sglang_server
+        server_command_line = self.get_server_command_line()
         # Set up environment variables for the subprocess
         env = self.get_environment_variables()
 
@@ -242,12 +246,14 @@ class SGLangBench(SGLangCommon):
         self.bench_environment = {}
         # Holding all results for all runs (batch size -> result)
         self.all_results = {}
+        self.batch_details = {}
     
     def warm_up(self):
         # No warm up for SGLang Bench
         pass
 
     def prepare(self):
+        global sglang_server
         self.all_results[self.batch_size] = None
         if self.bench_config['output-file'].exists():
             self.bench_config['output-file'].unlink()
@@ -258,6 +264,21 @@ class SGLangBench(SGLangCommon):
             if value == '': continue
             self.bench_command_line.append(str(value))
         self.bench_environment = self.get_environment_variables()
+        if not self.batch_size in self.batch_details:
+            # Server may have several command lines to start
+            if sglang_server is not None:
+                server_commands = [sglang_server.server_command_line]
+            else:
+                server_commands = ['[not running] ' + self.get_server_command_line()]
+            self.batch_details[self.batch_size] = {
+                'name': 'Batch ' + str(self.batch_size),
+                'desc': 'Batch ' + str(self.batch_size) + ' has no description',
+                'server_commands': server_commands,
+                'server_env': self.env,
+                'bench_commands': [self.bench_command_line],
+                'bench_env': self.bench_environment
+            }
+        print(f'{{ "Bench Command Line": "{" ".join(self.bench_command_line)}" }},', flush=True)
     
     def inference(self):
         result = subprocess.run(self.bench_command_line, capture_output=True, text=True, env=self.bench_environment)
@@ -286,12 +307,12 @@ class SGLangBench(SGLangCommon):
         try:
             import reports
             try:
-                reports.vllm_bench_report(self, self.sglang_config['model-path'] + '_bench', list(self.all_results.keys()), self.all_results)
+                reports.vllm_bench_report(self, self.sglang_config['model-path'] + '_bench', list(self.all_results.keys()), self.all_results, self.batch_details)
             except Exception as e:
                 print(f'{{ "Error": "Failed to generate SGLang Bench report: {e}" }},', flush=True)
                 pass
             try:
-                reports.vllm_bench_report_html(self, self.sglang_config['model-path'] + '_bench', list(self.all_results.keys()), self.all_results)
+                reports.vllm_bench_report_html(self, self.sglang_config['model-path'] + '_bench', list(self.all_results.keys()), self.all_results, self.batch_details)
             except Exception as e:
                 print(f'{{ "Error": "Failed to generate SGLang Bench report HTML: {e}" }},', flush=True)
                 pass

@@ -675,7 +675,7 @@ def normalize_bench_result(result):
             normalized[key] = None
     return normalized
 
-def vllm_bench_report(model, model_name, batches, all_results):
+def vllm_bench_report(model, model_name, batches, all_results, batch_details = None):
   columns_mapping = {
     'num_prompts': 'Number of Prompts',
     'request_throughput': 'Request Throughput',
@@ -709,6 +709,7 @@ def vllm_bench_report(model, model_name, batches, all_results):
     from openpyxl.chart import LineChart, Reference, Series
     from openpyxl.chart.series import SeriesLabel
     from openpyxl.chart.layout import Layout, ManualLayout
+    from openpyxl.styles import Alignment
     from openpyxl.utils import get_column_letter
 
     wb = openpyxl.Workbook()
@@ -719,8 +720,45 @@ def vllm_bench_report(model, model_name, batches, all_results):
 
     offset_col = 2
     offset_stat_row = benchmark_sheet.max_row + 1
+
+    if batch_details is not None:
+        benchmark_sheet.append(['Batch Details'])
+        for batch in batches:
+            benchmark_sheet.append([batch_details[batch]['name'], batch_details[batch]['desc']])
+            cell = benchmark_sheet.cell(row=benchmark_sheet.max_row, column=2)
+            cell.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+            benchmark_sheet.row_dimensions[benchmark_sheet.max_row].height = None
+            benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=2, end_row=benchmark_sheet.max_row, end_column=20)
+
+            benchmark_sheet.append(['Server Commands'])
+            for command in batch_details[batch]['server_commands']:
+                benchmark_sheet.append(['', command])
+                benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=2, end_row=benchmark_sheet.max_row, end_column=20)
+            if 'server_env' in batch_details[batch] and len(batch_details[batch]['server_env']) > 0:
+                benchmark_sheet.append(['Server Environment Variables'])
+                for key, value in batch_details[batch]['server_env'].items():
+                    benchmark_sheet.append(['', key, '', value])
+                    benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=2, end_row=benchmark_sheet.max_row, end_column=3)
+                    benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=4, end_row=benchmark_sheet.max_row, end_column=20)
+
+            benchmark_sheet.append(['Benchmark Commands'])
+            for command in batch_details[batch]['bench_commands']:
+                benchmark_sheet.append(['', command])
+                benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=2, end_row=benchmark_sheet.max_row, end_column=20)
+            if 'bench_env' in batch_details[batch] and len(batch_details[batch]['bench_env']) > 0:
+                benchmark_sheet.append(['Benchmark Environment Variables'])
+                for key, value in batch_details[batch]['bench_env'].items():
+                    benchmark_sheet.append(['', key, '', value])
+                    benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=2, end_row=benchmark_sheet.max_row, end_column=3)
+                    benchmark_sheet.merge_cells(start_row=benchmark_sheet.max_row, start_column=4, end_row=benchmark_sheet.max_row, end_column=20)
+
+            benchmark_sheet.append([])
+
     # Making columns header
-    benchmark_sheet.append(['Batch', *list(columns_mapping.values())])
+    if batch_details is None:
+        benchmark_sheet.append(['Batch', *list(columns_mapping.values())])
+    else:
+        benchmark_sheet.append(['Batch', *[batch_details[batch]['name'] for batch in batches]])
     benchmark_table = [benchmark_sheet.max_row + 1, benchmark_sheet.max_row + len(batches) + 1]
     # Making rows data
     for batch in batches:
@@ -948,10 +986,14 @@ details.env>summary:hover{color:var(--amber);}
 ::-webkit-scrollbar{height:10px; width:10px;}
 ::-webkit-scrollbar-thumb{background:var(--accent-d); border-radius:10px;}
 ::-webkit-scrollbar-track{background:transparent;}
+
+.copy-btn{background:transparent; border:none; color:var(--accent); font-size:12px; cursor:pointer; padding:0; margin:0;
+  display:inline-block; vertical-align:middle; line-height:1; transition:color 0.2s ease;}
+.copy-btn:hover{color:var(--amber);}
 """
 
 
-def vllm_bench_report_html(model, model_name, batches, all_results):
+def vllm_bench_report_html(model, model_name, batches, all_results, batch_details = None):
     columns_mapping = {
         'num_prompts': 'Number of Prompts',
         'request_throughput': 'Request Throughput',
@@ -988,6 +1030,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
+        import json
 
         # AMD-inspired dark palette (no blue accents anywhere)
         C = {
@@ -1083,8 +1126,21 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
             return (f'<details class="env"{attr}><summary>{esc(title)}</summary>'
                     f'<div class="env-body">{inner}</div></details>')
 
+        def cmd_list(cmds):
+            if isinstance(cmds, str):
+                cmds = [cmds]
+            cmds = [c for c in (cmds or []) if str(c).strip()]
+            if not cmds:
+                return '<div class="card">&mdash;</div>'
+            body = ''.join(f'<tr><td>{esc(c)}</td><td style="text-align:right !important;"><button class="copy-btn" onclick="navigator.clipboard.writeText({esc(repr(c))})">Copy</button></td></tr>' for c in cmds)
+            return (f'<div class="table-wrap"><table class="data lt"><tbody>'
+                    f'{body}</tbody></table></div>')
+
         # ---------- 3. Benchmarking results table (metrics x batches) ----------
-        th_cols = ''.join(f'<th>Batch {esc(b)}</th>' for b in valid_batches)
+        if batch_details is None:
+            th_cols = ''.join(f'<th>Batch {esc(b)}</th>' for b in valid_batches)
+        else:
+            th_cols = ''.join(f'<th>{batch_details[b]['name']}</th>' for b in valid_batches)
         result_rows = []
         for key, label in columns_mapping.items():
             cells = ''.join(f'<td>{fmt(all_results[b].get(key))}</td>' for b in valid_batches)
@@ -1092,7 +1148,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
         if valid_batches:
             results_table = (f'<div class="table-wrap"><table class="data"><thead><tr>'
                              f'<th>Metric</th>{th_cols}</tr></thead><tbody>'
-                             f'{"".join(result_rows)}</tbody></table></div>')
+                             f'{"".join(result_rows)}</tbody></table>')
         else:
             results_table = '<div class="card">No benchmark results available.</div>'
 
@@ -1111,7 +1167,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
             ('Description', esc(str(model))),
             ('Run Command', esc(' '.join(sys.argv))),
             ('Report Date', esc(report_datetime.strftime('%Y-%m-%d %H:%M:%S'))),
-            ('Batches', esc(', '.join(str(b) for b in batches))),
+            ('Batches', esc(', '.join(str(b) for b in batches) if batch_details is None else ', '.join(str(batch_details[b]['name']) + f' ({b})' for b in batches))),
             ('Total Inference Runs', fmt(getattr(model, 'total_inference_runs', None))),
         ]
 
@@ -1187,6 +1243,46 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
                                        two_col_table('Variable', 'Value', env_rows)))
         environment_section = ''.join(env_parts)
 
+        
+        rawdata = '\n<!-- RAWDATA --><div class="env-body"><pre>\n['
+        if batch_details:
+            rawdata += json.dumps(batch_details, indent=4)
+        else:
+            rawdata += 'No batch details available.'
+        rawdata += ',\n'
+        rawdata += json.dumps(all_results, indent=4)
+        rawdata += ']\n</pre></div><!-- END RAWDATA -->\n'
+        rawdata_section = details_block('Raw Data', rawdata)
+
+        # ---------- Batch details ----------
+        batch_details_section = ''
+        if batch_details:
+            bd_parts = []
+            for b in batches:
+                detail = batch_details.get(b)
+                if not detail:
+                    continue
+                name = detail.get('name', 'Batch ' + str(b))
+                inner = []
+                info_rows = [
+                    ('Batch', esc(b)),
+                    ('Description', esc(detail.get('desc')).replace('\n', '<br>')),
+                ]
+                inner.append(f'<div class="card">{kv_table(info_rows)}</div>')
+                inner.append('<h3 class="subhead">Server Commands</h3>')
+                inner.append(cmd_list(detail.get('server_commands')))
+                if 'server_env' in detail and len(detail['server_env']) > 0:
+                    inner.append('<h3 class="subhead">Server Environment Variables</h3>')
+                    inner.append(kv_table(detail['server_env'].items()))
+                inner.append('<h3 class="subhead">Benchmark Commands</h3>')
+                inner.append(cmd_list(detail.get('bench_commands')))
+                if 'bench_env' in detail and len(detail['bench_env']) > 0:
+                    inner.append('<h3 class="subhead">Benchmark Environment Variables</h3>')
+                    inner.append(kv_table(detail['bench_env'].items()))
+                bd_parts.append(details_block(name, ''.join(inner), is_open=False))
+            batch_details_section = details_block('Batch Details', ''.join(bd_parts), is_open=False)
+   
+
         # ---------- Assemble page ----------
         parts = []
         parts.append('<!DOCTYPE html>')
@@ -1204,42 +1300,35 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
             '<div class="hero-meta">'
             f'<div><span>Report Date</span>{esc(report_datetime.strftime("%Y-%m-%d %H:%M:%S"))}</div>'
             f'<div><span>Host</span>{esc(platform.node())}</div>'
-            f'<div><span>Batches</span>{esc(", ".join(str(b) for b in batches))}</div>'
+            f'<div><span>Batches</span>{esc(", ".join(str(b) for b in batches)) if batch_details is None else ", ".join(str(batch_details[b]['name']) for b in batches)}</div>'
             f'<div><span>Total Inference Runs</span>{fmt(getattr(model, "total_inference_runs", None))}</div>'
             '</div></header>'
         )
 
-        # 2. Table of contents
+        # 2. Table of contents + content sections (numbered dynamically)
+        content_sections = []
+        if batch_details_section:
+            content_sections.append(('batch-details', 'Batch Details', batch_details_section))
+        content_sections.append(('results', 'Benchmarking Results', results_table))
+        content_sections.append(('charts', 'Charts', charts_section))
+        content_sections.append(('environment', 'Environment Settings', environment_section))
+        content_sections.append(('rawdata', 'Raw Data', rawdata_section))
+
+        toc_items = ''.join(
+            f'<li><a href="#{sid}">{esc(title)}</a></li>' for sid, title, _ in content_sections
+        )
         parts.append(
             '<section id="toc">'
             '<div class="sec-head"><div class="sec-num">2</div><h2>Table of Contents</h2></div>'
-            '<nav class="card toc"><ol>'
-            '<li><a href="#results">Benchmarking Results</a></li>'
-            '<li><a href="#charts">Charts</a></li>'
-            '<li><a href="#environment">Environment Settings</a></li>'
-            '</ol></nav></section>'
+            f'<nav class="card toc"><ol>{toc_items}</ol></nav></section>'
         )
 
-        # 3. Benchmarking results
-        parts.append(
-            '<section id="results">'
-            '<div class="sec-head"><div class="sec-num">3</div><h2>Benchmarking Results</h2></div>'
-            f'{results_table}</section>'
-        )
-
-        # 4. Charts
-        parts.append(
-            '<section id="charts">'
-            '<div class="sec-head"><div class="sec-num">4</div><h2>Charts</h2></div>'
-            f'{charts_section}</section>'
-        )
-
-        # 5. Environment settings
-        parts.append(
-            '<section id="environment">'
-            '<div class="sec-head"><div class="sec-num">5</div><h2>Environment Settings</h2></div>'
-            f'{environment_section}</section>'
-        )
+        for sec_num, (sid, title, body) in enumerate(content_sections, start=3):
+            parts.append(
+                f'<section id="{sid}">'
+                f'<div class="sec-head"><div class="sec-num">{sec_num}</div><h2>{esc(title)}</h2></div>'
+                f'{body}</section>'
+            )
 
         parts.append(
             '<div class="foot">'
@@ -1247,7 +1336,8 @@ def vllm_bench_report_html(model, model_name, batches, all_results):
             '<span class="badge">vLLM Performance</span>'
             '</div>'
         )
-        parts.append('</div></body></html>')
+        parts.append('</div>')
+        parts.append('</body></html>')
 
         html_doc = ''.join(parts)
 

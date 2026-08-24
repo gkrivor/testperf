@@ -57,4 +57,4 @@ def get_available_models(lookup_name):
     print('\nDefault options: ')
     model_name = '.'.join(archive_path)
     print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}...' for x in list(archive_branch.keys()) if x != '.']))
-    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}' for x in archive_branch['.']]))
+    print("\n".join([f'{model_name + "." if model_name != "" else ""}{x}' for x in archive_branch['.'] if x != '__init__.py']))
