@@ -15,7 +15,7 @@ if model_name.startswith('.'):
 print(f'{{ "Model": "{model_name}",')
 print(f'"Hostname": "{platform.node()}",')
 print(f'"Platform": "{platform.system()} {platform.release()} {platform.version()}",')
-print(f'"Python Executable": "{sys.executable}",')
+print(f'"Python Executable": "{sys.executable.replace(chr(92), "/")}",')
 print(f'"Python Version": "{sys.version}",')
 print(f'"App path": "{settings.APP_PATH.as_posix()}",')
 print('"Steps": [')
@@ -28,7 +28,8 @@ try:
     sys.path.insert(0, settings.APP_PATH.as_posix())
 
   test_model = importlib.import_module(model_name)
-  print(f'{{ "Model": "{model_name}", "Status": "Loaded", "Path": "{test_model.__file__}" }},')
+  model_file = test_model.__file__.replace(chr(92), '/') if test_model.__file__ else test_model.__file__
+  print(f'{{ "Model": "{model_name}", "Status": "Loaded", "Path": "{model_file}" }},')
 
   # Check if Model class exists in the loaded module
   if not hasattr(test_model, 'Model'):

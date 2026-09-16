@@ -41,15 +41,17 @@ class TestModelLookup:
             f"Expected exit code 1, got {exit_code}"
     
     def test_models_parameter(self):
-        """Test test_perf.py with 'models' parameter - should fail with no Model attribute"""
+        """Test test_perf.py with 'models' parameter - should fail at load with no Model class"""
         stdout, stderr, exit_code = self.run_subprocess(["models"])
         
         combined_output = get_combined_output(stdout, stderr)
         
-        assert "Failed to create model module 'models' has no attribute 'Model'" in combined_output, \
+        assert "Failed to load model Module 'models' does not have a 'Model' class" in combined_output, \
             f"Expected error message not found. Output: {combined_output}"
-        assert exit_code == 2, \
-            f"Expected exit code 2, got {exit_code}"
+        assert "Available options:" in combined_output, \
+            f"Expected 'Available options:' not found. Output: {combined_output}"
+        assert exit_code == 1, \
+            f"Expected exit code 1, got {exit_code}"
     
     def test_models_yolo_parameter(self):
         """Test test_perf.py with 'models.yolo' parameter - should fail with module not found"""
@@ -80,15 +82,9 @@ class TestModelLookup:
         
         combined_output = get_combined_output(stdout, stderr)
 
-        if model_path.startswith("."):
-            # Verify exit code is 1 (failed) due to wrong naming
-            assert exit_code == 1, \
-                f"Expected exit code 0 for {model_path}, got {exit_code}. Output: {combined_output}"
-            return
-        else:
-            # Verify exit code is 0 (success)
-            assert exit_code == 0, \
-                f"Expected exit code 0 for {model_path}, got {exit_code}. Output: {combined_output}"
+        # Verify exit code is 0 (success); leading-dot paths normalize to a valid module too
+        assert exit_code == 0, \
+            f"Expected exit code 0 for {model_path}, got {exit_code}. Output: {combined_output}"
         
         # Verify the output contains expected model initialization
         assert "{ \"Noisy model\" : \"__init__()\" }," in combined_output, \

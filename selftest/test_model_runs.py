@@ -135,8 +135,8 @@ class TestModelRuns:
         section = after_warm_up[:total_inf_idx]
         inference_count = section.count('{ \"Noisy model\" : \"inference()\" },')
 
-        assert inference_count == (expected_count + 10), (
-            f"Expected {expected_count + 10} {{ \"Noisy model\" : \"inference()\" }}, calls in section, got {inference_count}."
+        assert inference_count == expected_count, (
+            f"Expected {expected_count} {{ \"Noisy model\" : \"inference()\" }}, calls in section, got {inference_count}."
             f"\n---\nSection: {section[:400]}..."
         )
     
