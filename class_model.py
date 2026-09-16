@@ -1,4 +1,5 @@
 import os
+import settings
 
 class Model:
   """Base class for all models"""
@@ -37,6 +38,6 @@ class Model:
   def shutdown(self):
     pass
   def get_file_path(self, file_name):
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp', file_name)
+    return os.path.join(settings.APP_PATH.as_posix(), 'temp', file_name)
   def __str__(self):
     return self.__doc__

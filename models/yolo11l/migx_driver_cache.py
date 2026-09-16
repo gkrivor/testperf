@@ -4,6 +4,7 @@ import re
 import subprocess
 import platform
 from time import perf_counter
+import settings
 
 model_source_name = 'yolov11l_{batch}b.onnx'
 migx_binary = 'migraphx-driver.exe' if platform.system() == 'Windows' else 'migraphx-driver'
@@ -16,8 +17,8 @@ if '--batch-size' in sys.argv:
   except Exception as e:
     print(f'{{ "Error": "Failed to set batch size {e}, using default [{", ".join(map(str, batches))}]" }},')
 
-if not os.path.exists('./temp'):
-  os.makedirs('./temp')
+if not os.path.exists(settings.APP_PATH / 'temp'):
+  os.makedirs(settings.APP_PATH / 'temp')
 
 # Get migraphx-driver version
 def get_migraphx_version():
@@ -96,9 +97,9 @@ for batch in batches:
   print(f'{{ "Processing Batch": {batch} }},')
   
   model_name = model_source_name.format(batch=batch)
-  model_path = os.path.join('./temp', model_name)
+  model_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', model_name)
   mxr_name = model_name[:-4] + 'mxr'
-  mxr_path = os.path.join('./temp', mxr_name)
+  mxr_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', mxr_name)
   
   # Step 1: Check if model exists, if not export it
   if not os.path.exists(model_path):
@@ -364,22 +365,26 @@ if inference_times:
     
     # Save workbook
     workbook_name = f"{platform.node().lower()}_models.yolo11l.migx_driver_cache_{report_datetime.strftime('%Y%m%d_%H%M%S')}.xlsx"
-    workbook_path = workbook_name
     
-    reports_path = os.path.join(os.path.dirname(__file__), '..', '..', 'reports', report_datetime.strftime("%Y%m%d"))
+    reports_path = os.path.join(settings.APP_PATH.as_posix(), 'reports', report_datetime.strftime("%Y%m%d"))
     if not os.path.exists(reports_path):
       os.makedirs(reports_path)
       try:
-        from shutil import copy
-        copy(os.path.join(os.path.dirname(__file__), '..', '..', "!StatViewer.xlsm"),
-             os.path.join(reports_path, "!StatViewer.xlsm"))
+        if settings.RUNNING_FROM_ARCHIVE:
+          data = settings.APP_LOADER.get_data("!StatViewer.xlsm")
+          with open(os.path.join(reports_path, "!StatViewer.xlsm"), "wb") as f:
+            f.write(data)
+        else:
+          from shutil import copy
+          copy(os.path.join(settings.APP_PATH.as_posix(), "!StatViewer.xlsm"),
+               os.path.join(reports_path, "!StatViewer.xlsm"))
       except Exception as e:
         print(f'{{ "Error": "Failed to copy !StatViewer.xlsm {e}" }}')
     
+    workbook_path = os.path.join(reports_path, workbook_name)
     wb.save(workbook_path)
-    os.rename(workbook_path, os.path.join(reports_path, workbook_path))
     
-    print(f'{{ "Workbook": "{os.path.join(reports_path, workbook_path).replace('\\', '/')}" }},')
+    print(f'{{ "Workbook": "{workbook_path.replace('\\', '/')}" }},')
     
   except Exception as e:
     print(f'{{ "Error": "Failed to generate report {e}" }},')
