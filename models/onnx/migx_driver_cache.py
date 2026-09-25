@@ -103,7 +103,7 @@ for batch in batches:
   
   model_name = os.path.basename(model_source_path)
   model_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', model_name)
-  mxr_name = model_name[:-4] + f'{batch}.mxr'
+  mxr_name = os.path.splitext(model_name)[0] + f'_b{batch}.mxr'
   mxr_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', mxr_name)
 
   # Step 1: Check if .mxr exists, if not compile it
