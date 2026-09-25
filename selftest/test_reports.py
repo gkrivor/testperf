@@ -6,13 +6,19 @@ import pytest
 import openpyxl
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from reports import performance_report
+from reports import (
+    performance_report,
+    vllm_bench_report,
+    vllm_bench_report_html,
+    model_details_rows,
+)
 
 
 class _MockModel:
     """Minimal stand-in for a model object required by performance_report."""
-    def __init__(self, total_inference_runs=100):
+    def __init__(self, total_inference_runs=100, details=None):
         self.total_inference_runs = total_inference_runs
+        self.details = {} if details is None else details
 
     def __str__(self):
         return "MockModel for testing"
@@ -59,17 +65,72 @@ class TestPerformanceReport:
             warm_up_times[b] = random.uniform(0.5, 5.0)
         return read_times, inference_times, warm_up_times
 
-    def _generate_report(self, batches, n_read=10, n_inference=12, seed=42):
+    def _generate_report(self, batches, n_read=10, n_inference=12, seed=42, details=None):
         read_times, inference_times, warm_up_times = self._make_data(
             batches, n_read, n_inference, seed
         )
-        model = _MockModel(total_inference_runs=10)
+        model = _MockModel(total_inference_runs=10, details=details)
         model_name = f"test_{datetime.datetime.now().strftime('%H%M%S%f')}"
         workbook_path = performance_report(
             model, model_name, read_times, inference_times, warm_up_times, batches
         )
         full_path = self._resolve_workbook(workbook_path)
         return full_path, read_times, inference_times, warm_up_times
+
+    @staticmethod
+    def _overview_rows(sheet):
+        return [list(r) for r in sheet.iter_rows(values_only=True)]
+
+    def _rows_after_model(self, sheet):
+        rows = self._overview_rows(sheet)
+        for idx, row in enumerate(rows):
+            if row and row[0] == "Model:":
+                return rows[idx + 1:]
+        raise AssertionError("Overview sheet: missing 'Model:' row")
+
+    def test_details_dict_after_model(self):
+        """Dict details render as key/value rows right after the Model row."""
+        details = {"Framework": "PyTorch", "Precision": "fp16"}
+        full_path, *_ = self._generate_report(
+            batches=[1], n_read=3, n_inference=4, details=details
+        )
+        wb = openpyxl.load_workbook(full_path)
+        following = self._rows_after_model(wb["Overview"])
+
+        assert following[0][0] == "Framework"
+        assert following[0][1] == "PyTorch"
+        assert following[1][0] == "Precision"
+        assert following[1][1] == "fp16"
+        # Description must come after the injected details rows
+        assert following[2][0] == "Description:"
+        wb.close()
+
+    def test_details_list_of_lists_after_model(self):
+        """List-of-list details render first item as key, rest as columns."""
+        details = [["Layers", 12, "transformer"], ["Params", "7B"]]
+        full_path, *_ = self._generate_report(
+            batches=[1], n_read=3, n_inference=4, details=details
+        )
+        wb = openpyxl.load_workbook(full_path)
+        following = self._rows_after_model(wb["Overview"])
+
+        assert following[0][0] == "Layers"
+        assert following[0][1] == 12
+        assert following[0][2] == "transformer"
+        assert following[1][0] == "Params"
+        assert following[1][1] == "7B"
+        assert following[2][0] == "Description:"
+        wb.close()
+
+    def test_no_details_leaves_report_unchanged(self):
+        """Empty details injects no extra rows between Model and Description."""
+        full_path, *_ = self._generate_report(
+            batches=[1], n_read=3, n_inference=4, details={}
+        )
+        wb = openpyxl.load_workbook(full_path)
+        following = self._rows_after_model(wb["Overview"])
+        assert following[0][0] == "Description:"
+        wb.close()
 
     def test_report_worksheets_and_overview(self):
         """Generate a report, verify worksheet names and Overview labels."""
@@ -266,3 +327,124 @@ class TestPerformanceReport:
                 cell_value = sheet.cell(row=row, column=2 + bi).value
                 expected_value = stat_rows[name].format(col=col, row_s=row_s, row_e=row_e, batch=batch)
                 assert str(cell_value) == str(expected_value), f"Inference sheet: '{name}' row value is incorrect for batch {batch}, expected {expected_value}, got {cell_value}"
+
+
+class TestModelDetailsRows:
+    """Unit tests for the model_details_rows() normalizer."""
+
+    def test_dict(self):
+        model = _MockModel(details={"a": 1, "b": "x"})
+        assert model_details_rows(model) == [["a", 1], ["b", "x"]]
+
+    def test_list_of_lists(self):
+        model = _MockModel(details=[["k1", 1, 2], ["k2", 3]])
+        assert model_details_rows(model) == [["k1", 1, 2], ["k2", 3]]
+
+    def test_list_of_scalars(self):
+        model = _MockModel(details=["only", "two"])
+        assert model_details_rows(model) == [["only"], ["two"]]
+
+    def test_empty_and_missing(self):
+        assert model_details_rows(_MockModel(details={})) == []
+        assert model_details_rows(_MockModel(details=None)) == []
+
+        class _Bare:
+            pass
+        assert model_details_rows(_Bare()) == []
+
+
+class TestVllmBenchReports:
+    """Coverage for details rendering in the vLLM Excel and HTML reports."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, tmp_path, monkeypatch):
+        self.parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        monkeypatch.chdir(tmp_path)
+        self._cleanup_paths = []
+        yield
+        for p in self._cleanup_paths:
+            try:
+                if p and os.path.exists(p):
+                    os.remove(p)
+            except OSError:
+                pass
+
+    @staticmethod
+    def _make_results(batches):
+        return {
+            b: {
+                'num_prompts': b,
+                'request_throughput': 1.5 * b,
+                'output_throughput': 2.0 * b,
+                'total_token_throughput': 3.0 * b,
+                'duration': 10.0,
+                'completed': b,
+            }
+            for b in batches
+        }
+
+    def test_excel_details_after_model(self):
+        batches = [1, 2]
+        details = {"Framework": "vLLM", "Quant": "awq"}
+        model = _MockModel(total_inference_runs=5, details=details)
+        model_name = f"vllm_{datetime.datetime.now().strftime('%H%M%S%f')}"
+
+        path = vllm_bench_report(
+            model, model_name, batches, self._make_results(batches)
+        )
+        assert path is not None and os.path.isfile(str(path)), \
+            f"vLLM workbook not found at {path}"
+        self._cleanup_paths.append(str(path))
+
+        wb = openpyxl.load_workbook(str(path))
+        overview = wb["Overview"]
+        rows = [list(r) for r in overview.iter_rows(values_only=True)]
+        model_idx = next(i for i, r in enumerate(rows) if r and r[0] == "Model:")
+        following = rows[model_idx + 1:]
+        assert following[0][0] == "Framework"
+        assert following[0][1] == "vLLM"
+        assert following[1][0] == "Quant"
+        assert following[1][1] == "awq"
+        assert following[2][0] == "Description:"
+        wb.close()
+
+    def test_html_details_dict_after_model(self):
+        batches = [1, 2]
+        details = {"Framework": "vLLM", "Quant": "awq"}
+        model = _MockModel(total_inference_runs=5, details=details)
+        model_name = f"vllmhtml_{datetime.datetime.now().strftime('%H%M%S%f')}"
+
+        path = vllm_bench_report_html(
+            model, model_name, batches, self._make_results(batches)
+        )
+        assert path is not None and os.path.isfile(str(path)), \
+            f"vLLM HTML report not found at {path}"
+        self._cleanup_paths.append(str(path))
+
+        with open(str(path), 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        model_pos = html.find('<th>Model</th>')
+        assert model_pos != -1, "HTML overview missing Model row"
+        assert '<tr><th>Framework</th><td>vLLM</td></tr>' in html
+        assert '<tr><th>Quant</th><td>awq</td></tr>' in html
+        # Details appear after the Model row and before Description
+        assert model_pos < html.find('<th>Framework</th>') < html.find('<th>Description</th>')
+
+    def test_html_details_multicolumn(self):
+        batches = [1]
+        details = [["Layers", 12, "transformer"], ["Params", "7B"]]
+        model = _MockModel(total_inference_runs=5, details=details)
+        model_name = f"vllmhtml_{datetime.datetime.now().strftime('%H%M%S%f')}"
+
+        path = vllm_bench_report_html(
+            model, model_name, batches, self._make_results(batches)
+        )
+        assert path is not None and os.path.isfile(str(path))
+        self._cleanup_paths.append(str(path))
+
+        with open(str(path), 'r', encoding='utf-8') as f:
+            html = f.read()
+
+        assert '<tr><th>Layers</th><td>12</td><td>transformer</td></tr>' in html
+        assert '<tr><th>Params</th><td>7B</td></tr>' in html

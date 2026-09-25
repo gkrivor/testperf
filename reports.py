@@ -8,6 +8,29 @@ from shutil import copy, which
 import traceback
 import settings
 
+def model_details_rows(model):
+  """Normalize ``model.details`` into a list of report rows.
+
+  Each returned row is a list whose first element is the key/label and whose
+  remaining elements are separate columns. Accepts ``details`` as either a
+  dict (key => value) or a list/set/tuple of list/set/tuple (first item is the
+  key, each remaining item is its own column). Missing/empty details yield [].
+  """
+  details = getattr(model, 'details', None)
+  if not details:
+    return []
+  rows = []
+  if isinstance(details, dict):
+    for k, v in details.items():
+      rows.append([k, v])
+  elif isinstance(details, (list, tuple, set)):
+    for item in details:
+      if isinstance(item, (list, tuple, set)):
+        rows.append(list(item))   # first entry = key, rest = columns
+      else:
+        rows.append([item])
+  return rows
+
 def performance_report(model,model_name, read_times, inference_times, warm_up_times, batches):
   workbook_path = None
   try:
@@ -255,6 +278,8 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     main_sheet.column_dimensions[get_column_letter(1)].width = 30
     main_sheet.append(['Model:', model_name])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
+    for details_row in model_details_rows(model):
+        main_sheet.append(details_row)
     main_sheet.append(['Description:', str(model)])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
     main_sheet.append(['Run Command:', ' '.join(sys.argv)])
@@ -802,6 +827,8 @@ def vllm_bench_report(model, model_name, batches, all_results, batch_details = N
     main_sheet.column_dimensions[get_column_letter(1)].width = 30
     main_sheet.append(['Model:', model_name])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
+    for details_row in model_details_rows(model):
+        main_sheet.append(details_row)
     main_sheet.append(['Description:', str(model)])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
     main_sheet.append(['Run Command:', ' '.join(sys.argv)])
@@ -1111,7 +1138,12 @@ def vllm_bench_report_html(model, model_name, batches, all_results, batch_detail
 
         # ---------- HTML building helpers ----------
         def kv_table(rows):
-            body = ''.join(f'<tr><th>{esc(k)}</th><td>{v}</td></tr>' for k, v in rows)
+            def _row(row):
+                row = list(row)
+                head = f'<th>{esc(row[0])}</th>'
+                cells = ''.join(f'<td>{v}</td>' for v in row[1:]) or '<td></td>'
+                return f'<tr>{head}{cells}</tr>'
+            body = ''.join(_row(r) for r in rows)
             return f'<table class="kv">{body}</table>'
 
         def two_col_table(h1, h2, rows):
@@ -1164,6 +1196,7 @@ def vllm_bench_report_html(model, model_name, batches, all_results, batch_detail
         # ---------- 5. Environment settings ----------
         overview_rows = [
             ('Model', esc(model_name)),
+            *[[row[0]] + [esc(c) for c in row[1:]] for row in model_details_rows(model)],
             ('Description', esc(str(model))),
             ('Run Command', esc(' '.join(sys.argv))),
             ('Report Date', esc(report_datetime.strftime('%Y-%m-%d %H:%M:%S'))),
