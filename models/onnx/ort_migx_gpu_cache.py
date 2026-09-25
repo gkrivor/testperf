@@ -24,6 +24,7 @@ class Model(Model):
     return self.get_file_path(base + '.migx')
   def prepare_batch(self, batch_size):
     self.model_file = common.get_model_path()
+    self.details[f'Model File (batch {batch_size})'] = self.model_file
     cache_path = self._cache_path()
     if not os.path.exists(cache_path):
       try:

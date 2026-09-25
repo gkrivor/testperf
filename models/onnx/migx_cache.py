@@ -17,6 +17,7 @@ class Model(Model):
     return self.get_file_path(base + '.mxr')
   def prepare_batch(self, batch_size):
     self.model_file = common.get_model_path()
+    self.details[f'Model File (batch {batch_size})'] = self.model_file
     cache_path = self._cache_path()
     if not os.path.exists(cache_path):
       try:
@@ -29,6 +30,7 @@ class Model(Model):
   def read(self):
     if self.model_file is None:
       self.model_file = common.get_model_path()
+    self.__doc__ = self.__doc__ + f' model: {self.model_file}'
     self.model = migraphx.load(self._cache_path())
     self.sess = ort.InferenceSession(self.model_file)
   def prepare(self):

@@ -97,6 +97,7 @@ def parse_migraphx_output(output):
 inference_times = {}
 compile_times = {}
 all_results = {}
+batch_mxr = {}
 
 for batch in batches:
   print(f'{{ "Processing Batch": {batch} }},')
@@ -104,6 +105,7 @@ for batch in batches:
   model_name = os.path.basename(model_source_path)
   model_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', model_name)
   mxr_name = os.path.splitext(model_name)[0] + f'_b{batch}.mxr'
+  batch_mxr[batch] = mxr_name
   mxr_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', mxr_name)
 
   # Step 1: Check if .mxr exists, if not compile it
@@ -319,6 +321,9 @@ if inference_times:
     main_sheet.column_dimensions[get_column_letter(1)].width = 30
     main_sheet.append(['Model:', f'{model_source_path} (MIGraphX)'])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
+    for batch, mxr_name in batch_mxr.items():
+      main_sheet.append([f'Model File (batch {batch})', mxr_name])
+      main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
     main_sheet.append(['Description:', 'Custom ONNX model running on MIGraphX'])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
     main_sheet.append(['Run Command:', ' '.join(sys.argv)])

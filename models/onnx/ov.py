@@ -15,6 +15,7 @@ class Model(Model):
     self.model_file = None
   def prepare_batch(self, batch_size):
     self.model_file = common.get_model_path()
+    self.details[f'Model File (batch {batch_size})'] = self.model_file
   def read(self):
     if self.model_file is None:
       self.model_file = common.get_model_path()
