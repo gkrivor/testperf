@@ -35,8 +35,9 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
   workbook_path = None
   try:
     import openpyxl
-    from openpyxl.chart import LineChart, Reference, Series
+    from openpyxl.chart import LineChart, ScatterChart, Reference, Series
     from openpyxl.chart.series import SeriesLabel
+    from openpyxl.chart.label import DataLabelList
     from openpyxl.chart.layout import Layout, ManualLayout
     from openpyxl.utils import get_column_letter
 
@@ -91,6 +92,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     chart.x_axis.delete = False
     chart.y_axis.delete = False
     chart.legend = None
+    chart.varyColors = False
     chart.layout=Layout(
         manualLayout=ManualLayout(
             x=0.02, y=0.02,
@@ -259,6 +261,7 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     chart.y_axis.scaling.max = x_axis_max
     chart.x_axis.delete = False
     chart.y_axis.delete = False
+    chart.varyColors = False
     for batch_index in range(len(batches)):
         series = Series(values=Reference(inference_sheet, min_col=batch_index + offset_col, min_row=offset_row, max_col=batch_index + offset_col, max_row=last_row), title=f"Batch {batches[batch_index]}")
         chart.series.append(series)
@@ -272,6 +275,39 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     )
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 2) + "33")
     main_sheet.add_chart(deepcopy(chart), "P35")
+
+    scatter = ScatterChart()
+    scatter.title = "BPS (Average) vs Latency (Average)"
+    scatter.x_axis.title = "Latency (Average) (s)"
+    scatter.y_axis.title = "BPS (Average)"
+    scatter.x_axis.delete = False
+    scatter.y_axis.delete = False
+    # logarithmic axes, auto min/max (do not set scaling.min/max)
+    scatter.x_axis.scaling.logBase = 10
+    scatter.y_axis.scaling.logBase = 10
+    scatter.varyColors = False
+
+    x_ref = Reference(inference_sheet, min_col=offset_col, min_row=offset_stat_row + 0,
+                      max_col=offset_col + len(batches) - 1, max_row=offset_stat_row + 0)
+    y_ref = Reference(inference_sheet, min_col=offset_col, min_row=offset_stat_row + 12,
+                      max_col=offset_col + len(batches) - 1, max_row=offset_stat_row + 12)
+    series = Series(values=y_ref, xvalues=x_ref)
+    series.marker.symbol = "circle"
+    series.marker.size = 7
+    # data label near the point showing the series name ("Batch N")
+    series.dLbls = DataLabelList()
+    series.dLbls.showSerName = False   # -> "Batch N"
+    series.dLbls.showVal = False
+    series.dLbls.showCatName = False
+    series.dLbls.showLegendKey = False
+    series.dLbls.position = "r"        # to the right of the point
+    scatter.series.append(series)
+    scatter.width = 15
+    scatter.legend.position = 'b'
+    scatter.layout = Layout(manualLayout=ManualLayout(x=0.02, y=0.02, h=0.65, w=0.9))
+
+    inference_sheet.add_chart(scatter, get_column_letter(len(batches) + 11) + "33")
+    main_sheet.add_chart(deepcopy(scatter), "F50")
 
     report_datetime = datetime.datetime.now()
     main_sheet.title = "Overview"
