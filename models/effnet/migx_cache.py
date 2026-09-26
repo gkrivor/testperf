@@ -22,6 +22,7 @@ class Model(Model):
   def prepare_batch(self, batch_size):
     file_path = self.get_file_path(onnx_name(self.version, batch_size, self.half))
     try_export_model(file_path, batch_size, self.version, self.half)
+    self.details[f'Model File (batch {batch_size})'] = file_path
     # Compile model to MIGraphX binary cache
     cache_path = file_path[:-4] + 'mxr'
     if not os.path.exists(cache_path):

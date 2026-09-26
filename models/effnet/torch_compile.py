@@ -17,6 +17,8 @@ class Model(Model):
     self.half = is_fp16()
     self.imgsz = get_image_size(self.version)
     self.model_id = f'google/efficientnet-{self.version}'
+  def prepare_batch(self, batch_size):
+    self.details[f'Model File (batch {batch_size})'] = f"{self.model_id} {self.imgsz} {'fp16' if self.half else 'fp32'}"
   def read(self):
     model = EfficientNetForImageClassification.from_pretrained(self.model_id)
     model.eval()
