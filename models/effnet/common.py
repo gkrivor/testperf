@@ -106,7 +106,6 @@ def get_input_np_dtype(half):
   import numpy as np
   return np.float16 if half else np.float32
 
-
 def try_export_model(file_path, batch_size, version, half_precision=False, opset=17):
   """Export google/efficientnet-<version> to ONNX (ported from effconv.py).
 
@@ -130,7 +129,12 @@ def try_export_model(file_path, batch_size, version, half_precision=False, opset
   model_id = f'google/efficientnet-{version}'
   size = get_image_size(version)
 
-  model = EfficientNetForImageClassification.from_pretrained(model_id)
+  model = None
+  try:
+    model = EfficientNetForImageClassification.from_pretrained(model_id)
+  except Exception as e:
+    raise Exception('Next dependencies might be required:\n    python -m pip install onnxscripts pip-system-certs\n'
+    f'Original error: {e}')
   model.eval()
 
   class LogitsWrapper(torch.nn.Module):
