@@ -3,6 +3,14 @@ import torch
 import numpy as np
 from class_model import Model
 from ultralytics import YOLO
+from .common import (
+    WEIGHTS_BASE_URL,
+    get_image_size,
+    get_model_name,
+    get_yolo_task,
+    is_fp16,
+    weights_name,
+)
 
 class Model(Model):
   """YOLOv8n inference with using default Torch"""
@@ -10,17 +18,32 @@ class Model(Model):
     super().__init__()
     self.model = None
     self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    self.model_path = './yolov8n.pt'
+    self.model_name = get_model_name()
+    self.task = get_yolo_task()
+    self.half = is_fp16()
+    self.imgsz = get_image_size(self.task)
+    self.model_path = weights_name(self.model_name, self.task)
+  def prepare_batch(self, batch_size):
+    self.details[f'Model File (batch {batch_size})'] = f"{self.model_path} {self.imgsz} {'fp16' if self.half else 'fp32'}"
   def read(self):
+    if not os.path.exists(self.model_path):
+      try:
+        import urllib.request
+        urllib.request.urlretrieve(WEIGHTS_BASE_URL + self.model_path, self.model_path)
+      except Exception as e:
+        raise Exception(f'Failed to download YOLO model {e}')
     if not os.path.exists(self.model_path):
       raise Exception(f'Model file {self.model_path} not found')
     self.model = YOLO(self.model_path)
     self.model.to(self.device)
+    if self.half:
+      self.model.model.half()
   def prepare(self):
     # Create random input tensor (B, C, H, W)
+    dtype = torch.float16 if self.half else torch.float32
     self.input_data = torch.randn(
-        self.batch_size, 3, 640, 640,
-        dtype=torch.float32,
+        self.batch_size, 3, self.imgsz, self.imgsz,
+        dtype=dtype,
         device=self.device
     )
     min_val = self.input_data.min()

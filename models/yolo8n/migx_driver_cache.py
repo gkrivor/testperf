@@ -6,7 +6,15 @@ import platform
 from time import perf_counter
 import settings
 
-model_source_name = 'yolov8n_{batch}b.onnx'
+from .common import (
+    get_image_size,
+    get_model_name,
+    get_yolo_task,
+    is_fp16,
+    onnx_name,
+    try_export_model,
+)
+
 migx_binary = 'migraphx-driver.exe' if platform.system() == 'Windows' else 'migraphx-driver'
 
 # Setting batch sizes from command line
@@ -16,6 +24,16 @@ if '--batch-size' in sys.argv:
     batches = [int(x) for x in sys.argv[sys.argv.index('--batch-size') + 1].split(',')]
   except Exception as e:
     print(f'{{ "Error": "Failed to set batch size {e}, using default [{", ".join(map(str, batches))}]" }},')
+
+# Resolve YOLO model (--model), task (--task) and precision (--fp16)
+try:
+  model_name = get_model_name()
+  task = get_yolo_task()
+except Exception as e:
+  print(f'{{ "Error": "Failed to resolve YOLO model {e}" }},')
+  model_name = 'yolov8n'
+  task = 'classify'
+half = is_fp16()
 
 if not os.path.exists(settings.APP_PATH / 'temp'):
   os.makedirs(settings.APP_PATH / 'temp')
@@ -86,9 +104,6 @@ def parse_migraphx_output(output):
   
   return data
 
-# Import try_export_model from yolo11l common
-from .common import try_export_model
-
 inference_times = {}
 compile_times = {}
 all_results = {}
@@ -96,16 +111,16 @@ all_results = {}
 for batch in batches:
   print(f'{{ "Processing Batch": {batch} }},')
   
-  model_name = model_source_name.format(batch=batch)
-  model_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', model_name)
-  mxr_name = model_name[:-4] + 'mxr'
+  model_file_name = onnx_name(model_name, task, batch, half)
+  model_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', model_file_name)
+  mxr_name = model_file_name[:-4] + 'mxr'
   mxr_path = os.path.join(settings.APP_PATH.as_posix(), 'temp', mxr_name)
   
   # Step 1: Check if model exists, if not export it
   if not os.path.exists(model_path):
     print(f'{{ "Exporting Model": "{model_path}" }},')
     try:
-      try_export_model(model_path, batch, half_precision=False)
+      try_export_model(model_path, batch, half_precision=half, model_name=model_name, task=task, imgsz=get_image_size(task))
     except Exception as e:
       print(f'{{ "Error": "Failed to export model {e}" }},')
       continue
@@ -321,9 +336,11 @@ if inference_times:
     # Build overview page
     report_datetime = datetime.datetime.now()
     main_sheet.column_dimensions[get_column_letter(1)].width = 30
-    main_sheet.append(['Model:', 'yolov8n (MIGraphX)'])
+    main_sheet.append(['Model:', f'{model_name} ({task}, MIGraphX)'])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
-    main_sheet.append(['Description:', 'YOLO8N model running on MIGraphX'])
+    main_sheet.append(['Description:', f'{model_name} {task} model running on MIGraphX'])
+    main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
+    main_sheet.append(['Precision:', 'FP16' if half else 'FP32'])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
     main_sheet.append(['Run Command:', ' '.join(sys.argv)])
     main_sheet.merge_cells(start_row=main_sheet.max_row, start_column=2, end_row=main_sheet.max_row, end_column=10)
