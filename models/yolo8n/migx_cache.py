@@ -4,7 +4,6 @@ import numpy as np
 import migraphx
 from .common import (
     get_image_size,
-    get_input_np_dtype,
     get_model_name,
     get_yolo_task,
     is_fp16,
@@ -40,7 +39,7 @@ class Model(Model):
     cache_path = file_path[:-4] + 'mxr'
     self.model = migraphx.load(cache_path)
   def prepare(self):
-    self.input_data = np.random.randn(self.batch_size, 3, self.imgsz, self.imgsz).astype(get_input_np_dtype(self.half))
+    self.input_data = np.random.randn(self.batch_size, 3, self.imgsz, self.imgsz).astype(np.float32)
   def inference(self):
     return self.model.run({'images': self.input_data})
   def shutdown(self):

@@ -6,7 +6,6 @@ import torch
 import onnxruntime as ort
 from .common import (
     get_image_size,
-    get_input_np_dtype,
     get_model_name,
     get_yolo_task,
     is_fp16,
@@ -52,8 +51,8 @@ class Model(Model):
     self.sess = ort.InferenceSession(file_path, **self.sess_data)
   def prepare(self):
     self.input_data = self.sess.io_binding()
-    np_dtype = get_input_np_dtype(self.half)
-    torch_dtype = torch.float16 if self.half else torch.float32
+    np_dtype = np.float32
+    torch_dtype = torch.float32
     images_shape = [self.batch_size, 3, self.imgsz, self.imgsz]
     self._input_tensor = torch.rand(images_shape, dtype=torch_dtype, device=self.device)
     self.input_data.bind_input('images', 'cuda', 0, np_dtype, images_shape, self._input_tensor.data_ptr())

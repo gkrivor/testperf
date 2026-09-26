@@ -4,7 +4,6 @@ import numpy as np
 import onnxruntime as ort
 from .common import (
     get_image_size,
-    get_input_np_dtype,
     get_model_name,
     get_yolo_task,
     is_fp16,

@@ -4,7 +4,6 @@ import numpy as np
 import onnxruntime as ort
 from .common import (
     get_image_size,
-    get_input_np_dtype,
     get_model_name,
     get_yolo_task,
     is_fp16,
@@ -33,7 +32,7 @@ class Model(Model):
     self.sess = ort.InferenceSession(file_path, **self.sess_data)
   def prepare(self):
     self.input_data = {
-      'images': np.random.randn(self.batch_size, 3, self.imgsz, self.imgsz).astype(get_input_np_dtype(self.half)),
+      'images': np.random.randn(self.batch_size, 3, self.imgsz, self.imgsz).astype(np.float32),
     }
   def inference(self):
     #return self.sess.run(['output0'], input_feed=self.input_data)

@@ -78,12 +78,6 @@ def is_fp16(argv=None):
   return '--fp16' in argv
 
 
-def get_input_np_dtype(half):
-  """Numpy dtype for the model input given the precision flag."""
-  import numpy as np
-  return np.float16 if half else np.float32
-
-
 def weights_name(model_name, task):
   """Build the Ultralytics weights file name for a model/task (e.g. 'yolov8n-cls.pt')."""
   return f'{str(model_name).lower()}{_task_suffix(task)}.pt'

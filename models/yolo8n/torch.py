@@ -40,7 +40,7 @@ class Model(Model):
       self.model.model.half()
   def prepare(self):
     # Create random input tensor (B, C, H, W)
-    dtype = torch.float16 if self.half else torch.float32
+    dtype = torch.float32
     self.input_data = torch.randn(
         self.batch_size, 3, self.imgsz, self.imgsz,
         dtype=dtype,
