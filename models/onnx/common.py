@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 
 import numpy as np
@@ -42,16 +43,139 @@ def get_model_path(args=None):
   return model_path
 
 
-def get_model_inputs(sess):
-  """Return the model input descriptors as a list of {name, shape, type}."""
-  return [{'name': node.name, 'shape': list(node.shape), 'type': node.type}
-          for node in sess.get_inputs()]
+def _parse_shape_dims(flag, dims_str):
+  """Parse the comma-separated dims inside a name[...] override into a list.
+
+  Each (stripped) token that is '?' (dynamic) or empty maps to None; any other
+  token must be an integer. None dims flow through resolve_shape's dynamic
+  handling (leading dynamic -> batch_size, others -> 1).
+  """
+  if not dims_str.strip():
+    return []
+  dims = []
+  for token in dims_str.split(','):
+    token = token.strip()
+    if token == '' or token == '?':
+      dims.append(None)
+      continue
+    try:
+      dims.append(int(token))
+    except ValueError:
+      raise Exception(
+        f'Invalid dimension {token!r} in {flag} shape; expected an integer or "?"')
+  return dims
 
 
-def get_model_outputs(sess):
-  """Return the model output descriptors as a list of {name, shape, type}."""
-  return [{'name': node.name, 'shape': list(node.shape), 'type': node.type}
-          for node in sess.get_outputs()]
+def parse_shape_args(flag, ext_params=None):
+  """Parse shape-override arguments of the form --flag "name[shape]anydata,...".
+
+  Reads sys.argv directly. Accepts multiple occurrences of ``flag`` (each value
+  accumulates) and multiple definitions per value. Definitions are delimited by
+  the sequence ",name[" (a comma immediately followed by a new name[ group), so
+  commas inside a shape or inside the trailing "anydata" are preserved.
+
+  A single definition has the form ``name[dims]anydata`` where the trailing
+  ``anydata`` (any text after ']', may contain commas, assumed not to contain
+  '['/']') is optional. Whitespace (spaces, tabs, newlines, carriage returns)
+  around names, dims, and anydata is ignored.
+
+  Returns a dict mapping ``name`` -> list of dims (ints, or None for '?'/empty).
+  Later definitions for the same name override earlier ones.
+
+  If a mutable ``ext_params`` dict is supplied, it is filled with the raw
+  trailing data: ``ext_params[name] = anydata`` (stripped string, or None when
+  absent). The anydata is otherwise ignored. It is reserved for a future use
+  case -- e.g. ``name[shape]=src/file/path`` to read/write/verify tensor data
+  from an external file instead of random data. The interpretation of anydata
+  (such as a leading '=') is intentionally left to that future consumer.
+  """
+  overrides = {}
+  argv = sys.argv
+  for index, token in enumerate(argv):
+    if token != flag:
+      continue
+    try:
+      value = argv[index + 1]
+    except IndexError:
+      raise Exception(f'Missing value for {flag} "name[shape]"')
+    if not value or value.startswith('--'):
+      raise Exception(f'Missing value for {flag} "name[shape]"')
+    # Split into definition chunks only at commas that precede a new name[ group
+    for chunk in re.split(r',(?=\s*[^\[\],]+\[)', value):
+      if not chunk.strip():
+        continue
+      match = re.match(r'^\s*([^\[\]]+)\[([^\]]*)\]\s*(.*)$', chunk, re.DOTALL)
+      if not match:
+        raise Exception(
+          f'Invalid {flag} definition {chunk.strip()!r}; expected name[shape]')
+      name = match.group(1).strip()
+      if not name:
+        raise Exception(
+          f'Invalid {flag} definition {chunk.strip()!r}; missing name')
+      overrides[name] = _parse_shape_dims(flag, match.group(2))
+      if ext_params is not None:
+        anydata = match.group(3).strip()
+        ext_params[name] = anydata if anydata else None
+  return overrides
+
+
+def parse_input_shapes(ext_params=None):
+  """Parse --input "name[shape]..." overrides from sys.argv (see parse_shape_args)."""
+  return parse_shape_args('--input', ext_params)
+
+
+def parse_output_shapes(ext_params=None):
+  """Parse --output "name[shape]..." overrides from sys.argv (see parse_shape_args).
+
+  Symmetrical to parse_input_shapes; not consumed by any provider yet but kept
+  parallel to inputs for future use.
+  """
+  return parse_shape_args('--output', ext_params)
+
+
+def _apply_shape_overrides(descriptors, shape_overrides, kind):
+  """Substitute descriptor shapes with user-supplied overrides (in place).
+
+  Raises when an override name does not match any model descriptor (typo
+  protection). ``kind`` is 'input' or 'output' for clear error messages.
+  """
+  if not shape_overrides:
+    return
+  names = {descriptor['name'] for descriptor in descriptors}
+  for name in shape_overrides:
+    if name not in names:
+      raise Exception(f'{kind.capitalize()} name not found in model: {name}')
+  for descriptor in descriptors:
+    if descriptor['name'] in shape_overrides:
+      descriptor['shape'] = list(shape_overrides[descriptor['name']])
+
+
+def get_model_inputs(sess, shape_overrides=None):
+  """Return the model input descriptors as a list of {name, shape, type}.
+
+  When ``shape_overrides`` is None, command-line --input overrides are parsed
+  from sys.argv; pass an explicit dict (name -> dim list) to override that.
+  """
+  if shape_overrides is None:
+    shape_overrides = parse_input_shapes()
+  descriptors = [{'name': node.name, 'shape': list(node.shape), 'type': node.type}
+                 for node in sess.get_inputs()]
+  _apply_shape_overrides(descriptors, shape_overrides, 'input')
+  return descriptors
+
+
+def get_model_outputs(sess, shape_overrides=None):
+  """Return the model output descriptors as a list of {name, shape, type}.
+
+  When ``shape_overrides`` is None, command-line --output overrides are parsed
+  from sys.argv; pass an explicit dict (name -> dim list) to override that.
+  """
+  if shape_overrides is None:
+    shape_overrides = parse_output_shapes()
+  descriptors = [{'name': node.name, 'shape': list(node.shape), 'type': node.type}
+                 for node in sess.get_outputs()]
+  _apply_shape_overrides(descriptors, shape_overrides, 'output')
+  return descriptors
 
 
 def get_ort_input_np_dtype(node_or_type):
@@ -98,15 +222,17 @@ def _random_array(shape, dtype):
   return np.random.randn(*shape).astype(np_dtype) if shape else np.random.randn(1).astype(np_dtype).reshape(())
 
 
-def random_input_feed(sess, batch_size):
+def random_input_feed(sess, batch_size, shape_overrides=None):
   """Build a {name: np.ndarray} feed dict for every model input.
 
-  Shapes are resolved via resolve_shape and dtypes via the model's declared
-  input types, so this works for an arbitrary ONNX model.
+  Shapes are resolved via resolve_shape (after applying any --input command-line
+  overrides) and dtypes via the model's declared input types, so this works for
+  an arbitrary ONNX model. When ``shape_overrides`` is None the overrides are
+  parsed from sys.argv; pass an explicit dict (name -> dim list) to override.
   """
   feed = {}
-  for node in sess.get_inputs():
-    shape = resolve_shape(list(node.shape), batch_size)
-    dtype = get_ort_input_np_dtype(node.type)
-    feed[node.name] = _random_array(shape, dtype)
+  for node in get_model_inputs(sess, shape_overrides):
+    shape = resolve_shape(node['shape'], batch_size)
+    dtype = get_ort_input_np_dtype(node['type'])
+    feed[node['name']] = _random_array(shape, dtype)
   return feed
