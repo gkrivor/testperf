@@ -23,7 +23,10 @@ package = {
         list(Path('./models/vllm').glob('**/*.py')) +
         list(Path('./models/sgl').glob('**/*.py')) +
         list(Path('./models/qwen').glob('**/*.py')) +
-        list(Path('./models/glm').glob('**/*.py')),
+        list(Path('./models/glm').glob('**/*.py')) +
+        list(Path('./models/onnx').glob('**/*.py')) +
+        list(Path('./models/yolo').glob('**/*.py')) +
+        list(Path('./models/effnet').glob('**/*.py')),
     'batches': 
         list(Path('./batches/glm').glob('**/*.py')) +
         list(Path('./batches/qwen').glob('**/*.py')),
