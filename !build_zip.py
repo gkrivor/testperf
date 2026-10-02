@@ -26,7 +26,8 @@ package = {
         list(Path('./models/glm').glob('**/*.py')) +
         list(Path('./models/onnx').glob('**/*.py')) +
         list(Path('./models/yolo').glob('**/*.py')) +
-        list(Path('./models/effnet').glob('**/*.py')),
+        list(Path('./models/effnet').glob('**/*.py')) +
+        list(Path('./models/speech').glob('**/*.py')),
     'batches': 
         list(Path('./batches/glm').glob('**/*.py')) +
         list(Path('./batches/qwen').glob('**/*.py')),

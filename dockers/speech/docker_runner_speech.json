@@ -1,0 +1,36 @@
+[
+  {
+    "docker_image": "testperf-speech-rocm",
+    "docker_file": "./dockers/speech/Dockerfile_rocm_pytorch",
+    "dont_remove": true,
+    "docker_custom_run": "docker run --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --shm-size 16g -e HF_HOME=/root/testperf/temp/hf_cache",
+    "tests": [
+      "models.speech.silero_vad.torch_compile --download --max-files 300 --verify --runs 2000 --batch-size 1,8,32,300",
+      "models.speech.silero_vad.ort --download --max-files 300 --runs 2000",
+      "models.speech.mms_lid.torch --download --max-files 300 --score --runs 300 --batch-size 1,8,16",
+      "models.speech.wespeaker.torch --download --max-files 300 --runs 300",
+      "models.speech.sortformer.nemo_torch --download --max-files 300 --geometry card_1.04s --runs 20 --batch-size 1,4,8,16"
+    ]
+  },
+  {
+    "docker_image": "testperf-speech-nemo-cpp",
+    "docker_file": "./dockers/speech/Dockerfile_nemo_speech_cpp",
+    "dont_remove": true,
+    "docker_custom_run": "docker run --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --shm-size 16g",
+    "tests": [
+      "models.speech.nemotron.stream --download --max-files 300 --model temp/models/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf --batch-size 0,1,2,3,4,5,6,7,8,9,10,11",
+      "models.speech.nemotron.offline --download --model temp/models/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf --batch-size 0,1,2,3,4",
+      "models.speech.nemotron.transcribe --download --model temp/models/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf --batch-size 0",
+      "models.speech.sortformer.gguf --download --max-files 300 --model temp/models/diar_streaming_sortformer_4spk-v2.1.q8_0.gguf --batch-size 0,1,2,3,4,5"
+    ]
+  },
+  {
+    "docker_image": "testperf-speech-unity2",
+    "docker_file": "./dockers/speech/Dockerfile_unity2",
+    "dont_remove": true,
+    "docker_custom_run": "docker run --device=/dev/kfd --device=/dev/dri --group-add video --ipc=host --shm-size 16g",
+    "tests": [
+      "models.speech.unity2_aligner.fairseq2 --download --max-files 300 --runs 300"
+    ]
+  }
+]

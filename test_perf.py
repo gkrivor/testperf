@@ -193,6 +193,10 @@ for batch in batches:
   print(f'"Batch Size" : {batch},')
   print(f'"Minimum" : "{min_time}",')
   print(f'"Maximum" : "{max_time}",')
+  audio_seconds = (getattr(model, 'audio_seconds', None) or {}).get(batch)
+  if audio_seconds:
+    print(f'"Audio Seconds" : "{audio_seconds}",')
+    print(f'"RTFx" : "{audio_seconds / sum(inference_times[batch][:-1])}",')
   print(f'"Average" : "{avg_time}"')
   print('} },')
 

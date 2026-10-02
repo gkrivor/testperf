@@ -9,6 +9,9 @@ class Model:
     self.current_inference_run = 0
     self.empty_runs = 0
     self.details = {}
+    # Batch size -> audio seconds covered by all timed inference runs of that batch.
+    # Models that set it get RTFx (audio seconds / inference seconds) in reports.
+    self.audio_seconds = {}
     pass
   def prepare_batch(self, batch_size):
     pass

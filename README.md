@@ -36,6 +36,38 @@ Simple run of YOLO11 Large model benchmarking using ONNXRuntime with default set
 python test_perf.py models.yolo11l.ort --batch-size 1,2,4,8,16
 ```
 
+## Speech models
+
+Speech tests live in `models/speech` and run on a real audio corpus instead of random tensors. A model that sets `audio_seconds` gets RTFx (audio seconds / inference seconds, higher is better) in the inference summary and the report.
+
+Audio corpus (16 kHz):
+- `--download` - download LibriSpeech test-clean (~350 MB) into `temp/` with reference transcripts
+- `--audio-dir DIR` - use your own `.wav`/`.flac` directory (or `SPEECH_AUDIO_DIR`); optional `refs.tsv` with `utterance-id<TAB>text`
+- `--subset FILE`, `--max-files N` - limit the corpus
+- `--synthetic N` - generated clips for a quick performance-only run
+
+| Test | Runtime | One timed run |
+|---|---|---|
+| `models.speech.silero_vad.{ort,ort_cuda,ort_migx,migx_cache,torch,torch_eager,torch_compile}` | ONNX Runtime, MIGraphX, PyTorch | one 32 ms chunk for each of N lockstep streams |
+| `models.speech.mms_lid.torch` | PyTorch (transformers) | N files of similar length |
+| `models.speech.wespeaker.torch` | PyTorch (pyannote.audio) | N files, whole utterance or sliding windows |
+| `models.speech.sortformer.nemo_torch` | NeMo PyTorch | `diarize()` of N files |
+| `models.speech.unity2_aligner.fairseq2` | fairseq2 0.2 | N files aligned to their transcripts |
+| `models.speech.nemotron.{offline,stream,transcribe}` | NeMo-Speech.cpp CLI | one tool call per sweep point |
+| `models.speech.sortformer.gguf` | NeMo-Speech.cpp CLI | one tool call per sweep point |
+
+Batch size is the number of streams or files per run. NeMo-Speech.cpp runners time themselves (concurrency, streaming first-partial latency), so there each batch index is a sweep point; without `--batch-size` all points run. Every file documents its options in the class docstring.
+
+The ONNX Silero runners report how many kernels each execution provider ran, so a silent CPU fallback is visible; `--no-cpu-fallback` makes it an error. The stock `silero_vad.onnx` does not compile with MIGraphX; `migx_cache` needs an If-free export.
+
+```bash
+python test_perf.py models.speech.silero_vad.torch_compile --download --max-files 300 --verify --runs 2000 --batch-size 1,8,32
+python test_perf.py models.speech.mms_lid.torch --download --score --batch-size 1,8,16
+python test_perf.py models.speech.nemotron.stream --download --model temp/models/nemotron-3.5-asr-streaming-0.6b.q8_0.gguf --right-context 3 --concurrency 1,16
+```
+
+Docker images and an example `docker_runner` config are in `dockers/speech`.
+
 ## Running batch tasks using docker images
 
 The provided `docker_runner.py` script allows you to automate the running of multiple benchmarking tasks across different Docker container configurations. It supports running batched tests, managing container lifecycle, and customizing Docker execution.

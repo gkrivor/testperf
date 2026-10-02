@@ -1,0 +1,31 @@
+FROM rocm/pytorch:rocm10.0_ubuntu24.04_py3.12_pytorch_release_2.13.0
+
+# seamless_communication 1.0.0 needs fairseq2==0.2.*, which has no ROCm wheel for torch 2.13.
+# fairseq2 v0.2.0 is built from source; it needs two torch 2.13 ABI edits in
+# fairseq2n/python/src/fairseq2n/bindings/type_casters/torch.cc, supplied as a patch in
+# dockers/speech/patches/fairseq2/:
+#  - THPVariable_Wrap takes const at::TensorBase& (torch 2.13 has no by-value overload)
+#  - THPVariable::cdata is at::Tensor (fairseq2 0.2 still describes MaybeOwned<Tensor>)
+RUN python3 -c "import torch; open('/tmp/torch-constraint.txt', 'w').write(f'torch=={torch.__version__}\n')"
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 \
+    && apt-get update && apt-get install -y --no-install-recommends git cmake ninja-build libsndfile1-dev libtbb-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --depth 1 --branch v0.2.0 --recurse-submodules https://github.com/facebookresearch/fairseq2.git /opt/fairseq2
+COPY dockers/speech/patches /tmp/patches
+RUN cd /opt/fairseq2 \
+    && ls /tmp/patches/fairseq2/*.patch > /dev/null 2>&1 \
+       || (echo "Missing torch 2.13 ABI patch in dockers/speech/patches/fairseq2/" && exit 1) \
+    && for p in /tmp/patches/fairseq2/*.patch; do git apply "$p"; done
+
+# Tests are off: the old test target does not link hipBLAS
+RUN cd /opt/fairseq2/fairseq2n && cmake -GNinja -B build -DBUILD_TESTING=OFF && cmake --build build \
+    && pip3 install --no-deps --no-build-isolation ./python \
+    && pip3 install --no-deps --no-build-isolation /opt/fairseq2
+
+RUN git clone --depth 1 https://github.com/facebookresearch/seamless_communication.git /opt/seamless_communication \
+    && pip3 install --no-deps /opt/seamless_communication \
+    && pip3 install --no-deps importlib_resources ruamel.yaml \
+    && pip3 install -c /tmp/torch-constraint.txt soundfile librosa pyyaml tqdm requests
+
+ENV FAIRSEQ2_CACHE_DIR=/root/testperf/temp/fairseq2_cache

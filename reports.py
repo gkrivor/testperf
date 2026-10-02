@@ -138,6 +138,12 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     inference_sheet.append(["BPS (95th Percentile)"])
     inference_sheet.append(["BPS (99th Percentile)"])
     inference_sheet.append(["Warm Up Time"])
+    audio_seconds = getattr(model, 'audio_seconds', None) or {}
+    has_audio = any(audio_seconds.get(batch) for batch in batches)
+    if has_audio:
+        inference_sheet.append(["Audio Seconds (Timed Runs)"])
+        inference_sheet.append(["Inference Seconds (Timed Runs)"])
+        inference_sheet.append(["RTFx"])
 
     # Table header
     inference_sheet.append(["Run"] + [f"Batch {batch}" for batch in batches])
@@ -168,6 +174,10 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
         inference_sheet[col_letter + str(offset_stat_row + 15)] = "=" + str(batches[batch_index]) + " * " + col_letter + str(offset_stat_row + 10)
         inference_sheet[col_letter + str(offset_stat_row + 16)] = "=" + str(batches[batch_index]) + " * " + col_letter + str(offset_stat_row + 11)
         inference_sheet[col_letter + str(offset_stat_row + 17)] = str(warm_up_times[batches[batch_index]])
+        if has_audio and audio_seconds.get(batches[batch_index]):
+            inference_sheet[col_letter + str(offset_stat_row + 18)] = audio_seconds[batches[batch_index]]
+            inference_sheet[col_letter + str(offset_stat_row + 19)] = "=SUM(" + col_letter + str(offset_row) + ":" + col_letter + str(last_row) + ")"
+            inference_sheet[col_letter + str(offset_stat_row + 20)] = "=" + col_letter + str(offset_stat_row + 18) + " / " + col_letter + str(offset_stat_row + 19)
 
     chart = LineChart()
     chart.title = "Metrics"
@@ -245,6 +255,29 @@ def performance_report(model,model_name, read_times, inference_times, warm_up_ti
     chart.width = 15
     inference_sheet.add_chart(chart, get_column_letter(len(batches) + 11) + "16")
     main_sheet.add_chart(deepcopy(chart), "P20")
+
+    if has_audio:
+        chart = LineChart()
+        chart.title = "RTFx"
+        chart.x_axis.title = "Batch Size"
+        chart.y_axis.title = "Audio Seconds Per Second"
+        chart.x_axis.delete = False
+        chart.y_axis.delete = False
+        chart.legend = None
+        series = Series(values=Reference(inference_sheet, min_col=offset_col, min_row=offset_stat_row + 20, max_col=offset_col + len(batches) - 1, max_row=offset_stat_row + 20), title="RTFx")
+        series.marker.symbol = "circle"
+        series.marker.size = 6
+        chart.series.append(series)
+        chart.set_categories(batch_titles)
+        chart.layout=Layout(
+            manualLayout=ManualLayout(
+                x=0.02, y=0.02,
+                h=0.75, w=0.9,
+            )
+        )
+        chart.width = 15
+        inference_sheet.add_chart(chart, get_column_letter(len(batches) + 2) + "50")
+        main_sheet.add_chart(deepcopy(chart), "P50")
 
     idx = 0
     max_rows = max(batch_inference_lengths)
