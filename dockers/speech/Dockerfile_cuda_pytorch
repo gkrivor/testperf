@@ -1,0 +1,6 @@
+FROM pytorch/pytorch:2.9.1-cuda12.8-cudnn9-runtime
+
+# NVIDIA counterpart of Dockerfile_rocm_pytorch with the same Python stack
+RUN python3 -c "import torch; open('/tmp/torch-constraint.txt', 'w').write(f'torch=={torch.__version__}\n')"
+RUN pip3 install -c /tmp/torch-constraint.txt 'transformers>=4.48' soundfile huggingface_hub 'pyannote.audio>=3.3' onnxruntime-gpu
+RUN pip3 install -c /tmp/torch-constraint.txt 'nemo_toolkit[asr]'

@@ -1,0 +1,11 @@
+FROM rocm/pytorch:rocm10.0_ubuntu24.04_py3.12_pytorch_release_2.13.0
+
+# Pin the image's ROCm torch so NeMo, transformers and pyannote cannot replace it
+RUN python3 -c "import torch; open('/tmp/torch-constraint.txt', 'w').write(f'torch=={torch.__version__}\n')"
+
+# MMS LID, WeSpeaker, Silero VAD (PyTorch + ONNX Runtime CPU), Sortformer v2.1 (NeMo)
+RUN pip3 install -c /tmp/torch-constraint.txt 'transformers>=4.48' soundfile huggingface_hub 'pyannote.audio>=3.3' onnxruntime
+RUN pip3 install -c /tmp/torch-constraint.txt 'nemo_toolkit[asr]'
+
+# Do not pip-install torchaudio: the image ships the ROCm build
+RUN python3 -c "import torch; assert 'rocm' in torch.__version__, torch.__version__"

@@ -1,0 +1,34 @@
+FROM rocm/pytorch:rocm10.0_ubuntu24.04_py3.12_pytorch_release_2.13.0
+
+ARG NEMO_SPEECH_COMMIT=97a15afa5caa9bce5baaa86c1184103877af4101
+ARG GPU_TARGETS=gfx950
+
+# The image ships ROCm as Python wheels without development files; add the matching SDK
+RUN pip download --no-deps -d /tmp/rocm-sdk --index-url https://stable.repo.amd.com/rocm/whl-next "rocm-sdk-devel==10.0.0" \
+    && pip install --no-deps /tmp/rocm-sdk/rocm_sdk_devel-*.whl \
+    && rm -rf /tmp/rocm-sdk
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 \
+    && apt-get update && apt-get install -y --no-install-recommends git cmake ninja-build pkg-config libsentencepiece-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone https://github.com/NVIDIA/NeMo-Speech.cpp /opt/NeMo-Speech.cpp \
+    && cd /opt/NeMo-Speech.cpp && git checkout ${NEMO_SPEECH_COMMIT} && git submodule update --init --recursive
+
+# Optional local patches, e.g. the first-partial latency instrumentation used by bench asr --mode stream
+COPY dockers/speech/patches /tmp/patches
+RUN cd /opt/NeMo-Speech.cpp && for p in /tmp/patches/nemo-speech/*.patch; do [ -f "$p" ] && git apply "$p" || true; done
+
+RUN R=$(rocm-sdk path --root) && cd /opt/NeMo-Speech.cpp \
+    && cmake --preset cpu-asr -B build/hip -DCMAKE_BUILD_TYPE=Release \
+       -DGGML_HIP=ON -DGPU_TARGETS=${GPU_TARGETS} -DAMDGPU_TARGETS=${GPU_TARGETS} \
+       -DCMAKE_PREFIX_PATH=$R -DCMAKE_HIP_COMPILER=$R/llvm/bin/clang++ \
+    && cmake --build build/hip -j $(nproc)
+
+# Wrapper puts the build and the non-ASAN ROCm libraries first, so runners can call "nemo-speech"
+RUN R=$(rocm-sdk path --root) \
+    && printf '#!/bin/sh\nexport LD_LIBRARY_PATH=/opt/NeMo-Speech.cpp/build/hip/bin:%s/lib:$LD_LIBRARY_PATH\nexec /opt/NeMo-Speech.cpp/build/hip/bin/nemo-speech "$@"\n' "$R" \
+       > /usr/local/bin/nemo-speech \
+    && chmod +x /usr/local/bin/nemo-speech
+
+# soundfile: LibriSpeech download (--download). numpy/gguf pins: convert_model.py reproduces published GGUF hashes
+RUN pip install soundfile 'numpy==1.26.4' 'gguf==0.19.0'
