@@ -440,3 +440,71 @@ def ort_kernel_placement(model_path, providers, feed, disable_cpu_fallback=False
     seen.add(name)
     counts[provider] = counts.get(provider, 0) + 1
   return counts, sess.get_providers()
+
+
+class AudioModel(Model):
+  """Base class for streaming audio models driven by a single source read in sliding windows."""
+  def __init__(self):
+    super().__init__()
+    self.model_sample_rate = 16000
+    self.model_sliding_window = 1  # seconds
+    self.total_inference_runs = 0
+    self.source_samples = 0  # per-stream sample count (N * model_sample_rate, always integer)
+    self.source_buffer = None  # numpy ndarray with shape [source_samples]
+    self.source_position = 0  # current read offset in samples (within a single stream)
+
+  def calc_rnd_src_duration(self):
+    """Duration in seconds of the random source used when no --source is given."""
+    return self.model_sliding_window * 100
+
+  def get_duration(self):
+    """Length of a single stream in seconds."""
+    if self.source_buffer is None:
+      return 0.0
+    return self.source_samples / self.model_sample_rate
+
+  def prepare(self):
+    self.source_position = round(self.current_inference_run * self.model_sample_rate * self.model_sliding_window)
+
+  def prepare_batch(self, batch_size):
+    # The classic batch (parallel identical streams) is built later in prepare;
+    # source_buffer holds a single copy of the source.
+    self.prepare_source()
+
+  def prepare_source(self):
+    source_path = None
+    if '--source' in sys.argv:
+      index = sys.argv.index('--source')
+      if index + 1 >= len(sys.argv) or sys.argv[index + 1].startswith('--'):
+        raise Exception('Missing value for --source')
+      source_path = sys.argv[index + 1]
+    if source_path is not None:
+      try:
+        import soundfile as sf
+        audio, sample_rate = sf.read(str(source_path), dtype='float32', always_2d=False)
+      except ImportError:
+        if Path(source_path).suffix.lower() != '.wav':
+          raise Exception(f'soundfile is required to read {source_path}')
+        with wave.open(str(source_path), 'rb') as wav:
+          if wav.getsampwidth() != 2:
+            raise Exception(f'Only 16-bit PCM WAV can be read without soundfile: {source_path}')
+          sample_rate = wav.getframerate()
+          channels = wav.getnchannels()
+          audio = np.frombuffer(wav.readframes(wav.getnframes()), dtype='<i2').astype(np.float32) / 32768.0
+          if channels > 1:
+            audio = audio.reshape(-1, channels)
+      if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+      audio = np.ascontiguousarray(audio, dtype=np.float32)
+    else:
+      audio = np.ascontiguousarray(
+        np.random.standard_normal(round(self.model_sample_rate * self.calc_rnd_src_duration())), dtype=np.float32)
+    self.source_samples = len(audio)
+    self.source_buffer = np.ascontiguousarray(audio, dtype=np.float32)
+    samples_per_window = round(self.model_sample_rate * self.model_sliding_window)
+    self.total_inference_runs = (self.source_samples + samples_per_window - 1) // samples_per_window
+    self.details['Model Sample Rate'] = self.model_sample_rate
+    self.details['Model Sliding Window'] = self.model_sliding_window
+    self.details['Source Path'] = source_path if source_path is not None else 'random'
+    self.details['Source Samples'] = self.source_samples
+    self.details['Source Seconds'] = round(self.source_samples / self.model_sample_rate, 3)
